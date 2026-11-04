@@ -227,9 +227,8 @@ resource "aws_security_group" "alb" {
   name        = "${var.name_prefix}-alb-sg"
   description = "Allow HTTPS only from CloudFront origin-facing addresses."
   vpc_id      = aws_vpc.this.id
-  ingress     = []
-  egress      = []
-  tags        = merge(local.common_tags, { Name = "${var.name_prefix}-alb-sg" })
+  # Rules are managed by aws_vpc_security_group_*_rule resources below.
+  tags = merge(local.common_tags, { Name = "${var.name_prefix}-alb-sg" })
 }
 
 resource "aws_vpc_security_group_ingress_rule" "alb_https_cloudfront" {
@@ -245,9 +244,8 @@ resource "aws_security_group" "app" {
   name        = "${var.name_prefix}-app-sg"
   description = "Allow WordPress traffic from the ALB and required app egress only."
   vpc_id      = aws_vpc.this.id
-  ingress     = []
-  egress      = []
-  tags        = merge(local.common_tags, { Name = "${var.name_prefix}-app-sg" })
+  # Rules are managed by aws_vpc_security_group_*_rule resources below.
+  tags = merge(local.common_tags, { Name = "${var.name_prefix}-app-sg" })
 }
 
 resource "aws_vpc_security_group_ingress_rule" "app_from_alb" {
@@ -297,9 +295,8 @@ resource "aws_security_group" "db" {
   name        = "${var.name_prefix}-db-sg"
   description = "Allow MySQL only from the WordPress application security group."
   vpc_id      = aws_vpc.this.id
-  ingress     = []
-  egress      = []
-  tags        = merge(local.common_tags, { Name = "${var.name_prefix}-db-sg" })
+  # Rules are managed by aws_vpc_security_group_*_rule resources below.
+  tags = merge(local.common_tags, { Name = "${var.name_prefix}-db-sg" })
 }
 
 resource "aws_vpc_security_group_egress_rule" "app_to_db" {

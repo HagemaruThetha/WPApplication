@@ -1,6 +1,6 @@
 ﻿# Xtremax Cloud Engineer Assessment — Terraform Submission
 
-This repository contains a Terraform implementation plan for the school WordPress assessment, a modular AWS configuration, architecture/module diagrams, and a validation/test record. The configuration is intended for review and `terraform plan`; no AWS resources have been applied by this submission.
+This repository contains the Terraform implementation for the school WordPress assessment, architecture/module diagrams, and a validation/test record. The AWS test deployment is live at [https://assessment.zharifzhafran.xyz](https://assessment.zharifzhafran.xyz). It uses a separate test hostname so the existing apex and `www` DNS records stay untouched. See [docs/TEST_PLAN.md](docs/TEST_PLAN.md) for checks performed and remaining manual WordPress setup.
 
 ## Architecture
 

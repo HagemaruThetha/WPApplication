@@ -2,29 +2,29 @@
 
 ## Evidence status
 
-No AWS resources have been applied; no live endpoint, load test, or access-denial test has been run. Static checks ran on Terraform v1.16.1 (AWS provider 6.62.0, random 3.9.1, lock file `terraform/.terraform.lock.hcl`). `terraform plan -refresh=false` used the example tfvars and dummy credentials with credential/account validation skipped (scratch-only override, not in the submission); result: **Plan: 96 to add, 0 to change, 0 to destroy**. Full output: [terraform-plan-output.txt](terraform-plan-output.txt). Plan review found and fixed two defects: an unescaped bash `${WORDPRESS_VERSION}` in the user-data template, and an `aws_efs_mount_target` `for_each` over apply-time subnet IDs (now `count`).
+Static checks ran on Terraform v1.16.1 (AWS provider 6.62.0, random 3.9.1). A real test deployment was applied in AWS account `217508296909`, region `ap-southeast-1`. The site is `https://assessment.zharifzhafran.xyz`; apex and `www` DNS were left unchanged. The final Terraform plan reports no differences. The CloudFront distribution and ACM certificate are deployed, and the endpoint responds over verified HTTPS. The WordPress installer is intentionally awaiting manual site setup; admin login, uploads, and authenticated flows therefore remain untested. The deployment incurs AWS charges while it remains running. The original scratch plan used example values and dummy credentials and is not evidence of the live deployment.
 
 ## Static and plan-level checks
 
 | Check | Method | Expected result | Result |
 |---|---|---|---|
-| Terraform formatting | `terraform fmt -check -recursive` from `terraform/` | No formatting changes required | **Passed** (all `.tf` files formatted) |
+| Terraform formatting | `terraform fmt -check -recursive` from `terraform/` | No formatting changes required | **Passed** (rerun after the live hostname change) |
 | WordPress startup script shell syntax | `bash -n terraform/modules/application/user_data.sh.tftpl` using Git for Windows Bash | Shell script parses without syntax errors | **Passed** |
-| Terraform initialization | `terraform init -backend=false -input=false` | AWS/random provider and local modules initialize successfully | **Passed** (providers installed, lock file generated) |
-| Terraform syntax/schema | `terraform validate` | Configuration is valid | **Passed** (`Success! The configuration is valid.`) |
+| Terraform initialization | `terraform init -backend=false -input=false` | AWS/random provider and local modules initialize successfully | **Passed** |
+| Terraform syntax/schema | `terraform validate` | Configuration is valid | **Passed** (rerun after the live hostname change) |
 | Resource and policy review | `terraform plan -refresh=false` with valid non-secret example inputs | Plan includes VPC, six subnets, NAT, NACLs, tier security groups, ALB, ASG, RDS, EFS, secret, IAM, and CloudFront; no public EC2/RDS | **Passed**: 96 resources to add, 0 change, 0 destroy; RDS `publicly_accessible=false`, storage encrypted |
 | ASG bounds | Inspect plan for ASG values | `min_size=1`, `max_size=4`, desired capacity from 1 through 4 | **Passed**: plan shows min_size=1, max_size=4 |
 | Scale-out alarm | Inspect plan for CloudWatch alarm | CPU `GreaterThanThreshold` 80%, period 300 seconds, 6 evaluation periods and 6 datapoints to alarm | **Passed**: plan shows threshold, period 300, 6 evaluation periods, 6 datapoints |
 | Scale-in alarm | Inspect plan for CloudWatch alarm | CPU `LessThanThreshold` 40%, period 300 seconds, 6 evaluation periods and 6 datapoints to alarm | **Passed**: plan shows threshold, period 300, 6 evaluation periods, 6 datapoints |
 | HTTPS configuration | Inspect ALB listeners and CloudFront distribution in plan | ALB has HTTPS listener; CloudFront enforces HTTPS to viewer and HTTPS-only origin | **Passed**: plan shows ALB listener HTTPS/443, CloudFront `redirect-to-https`, origin `https-only` |
-| Network reachability rules | Inspect security groups and NACLs in plan | ALB only from CloudFront prefix list; app only from ALB for HTTP; app DNS only to VPC CIDR; DB only from app on 3306; NACLs include needed return traffic | **Passed** (plan contains 4 SGs, 3 NACLs, per-tier rules); not exercised live |
-| IAM and secret handling | Inspect IAM policy, secret resources, user data, ZIP contents | App role can read only the DB secret; no actual password in source/ZIP; state not packaged | **Partial**: ZIP inspection passed (24 expected files, no state/local vars/provider cache); plan includes one IAM role/inline policy scoped to the one secret |
+| Network reachability rules | Inspect deployed security groups and NACLs | ALB only from CloudFront prefix list; app only from ALB for HTTP; DB only from app on 3306 | **Passed**: deployed rules inspected; direct ALB request from public client timed out as expected |
+| IAM and secret handling | Inspect IAM policy and user data | App role reads only its DB secret; secret values are not embedded in launch user data | **Passed**: user data retrieves the DB secret at boot; no public EC2 IPs |
 
 ## Automated tests and security scans (no AWS needed)
 
 | Check | Command | Result |
 |---|---|---|
-| Terraform unit tests (mocked providers) | `terraform test` from `terraform/` (`plan.tftest.hcl`) | **Passed**: 3 passed, 0 failed. Asserts ASG min 1/max 4, scale-out >80% and scale-in <40% for 30 min, ALB HTTPS/443 with deletion protection and access logs, no public EC2 IPs, CloudFront redirect-to-HTTPS, HTTPS-only origin and geo restriction, RDS private, encrypted, Multi-AZ and deletion protected |
+| Terraform unit tests (mocked providers) | `terraform test` from `terraform/` (`plan.tftest.hcl`) | **Passed on final configuration**: 3 passed, 0 failed. Asserts ASG min 1/max 4, scale-out >80% and scale-in <40% for 30 min, ALB HTTPS/443 with deletion protection and access logs, no public EC2 IPs, CloudFront redirect-to-HTTPS, HTTPS-only origin and geo restriction, RDS private, encrypted, Multi-AZ and deletion protected |
 | IaC security scan | `checkov -d terraform --framework terraform` | **Passed**: 173 passed, 0 failed, 3 skipped with written justification (see below); [checkov-report.txt](checkov-report.txt) |
 | IaC misconfiguration scan | `trivy config terraform` | **Passed**: no findings; accepted items carry `#trivy:ignore` with a reason; [trivy-report.txt](trivy-report.txt) |
 | `tflint` | not run | Not installed (no Homebrew formula found); not run |
@@ -46,26 +46,31 @@ Cost and teardown: Multi-AZ RDS, WAF and flow logs add cost. `deletion_protectio
 
 ## Post-deployment functional and security checks
 
-Only run these if AWS resources are deliberately deployed. The assessment does not require deployment.
+Live checks for the AWS test deployment. WordPress itself is still at the first-run installer, so checks that require a configured site or admin account are pending.
 
 | Check | Method | Expected result | Result |
 |---|---|---|---|
-| Website TLS | Open the configured website hostname over HTTPS | Valid certificate and WordPress response; CloudFront redirects viewer HTTP to HTTPS | Not run (no deployment) |
-| PHP and permalinks | Check `php-fpm` and `httpd` services, then request a WordPress pretty permalink | Both services are active; Apache applies WordPress rewrite rules and page returns successfully | Not run (no deployment) |
-| CloudFront origin TLS | Request the site through CloudFront; inspect response/errors | CloudFront reaches the ALB over HTTPS; no certificate mismatch/502 | Not run (no deployment) |
-| ALB target health | Check target group health | At least one WordPress EC2 target is healthy | Not run (no deployment) |
-| Database connectivity | Check WordPress page load and app logs; verify DB SG source | WordPress can connect to RDS; unrelated sources cannot reach MySQL | Not run (no deployment) |
-| Shared media | Upload a test image, then access from another ASG instance | Upload is available across instances through EFS | Not run (no deployment) |
-| Cross-instance login/session | Sign in through CloudFront, then repeat authenticated requests while routing across different ASG targets | Login cookie, nonce, and authenticated state remain valid across instances | Not run (no deployment) |
-| Consistent code | Inspect launched instances and attempt a dashboard plugin/theme update | Each instance runs the pinned WordPress version; dashboard file updates are disabled and code changes require a consistent redeployment | Not run (no deployment) |
-| Scale out | Sustain average CPU above 80% for 30 minutes, then inspect ASG activity | ASG adds one instance and never exceeds four | Not run (no deployment) |
-| Scale in | Sustain average CPU below 40% for 30 minutes, then inspect ASG activity | ASG removes one instance and never drops below one | Not run (no deployment) |
-| Direct origin restriction | Attempt ALB access outside CloudFront source ranges | Request is blocked by ALB security group | Not run (no deployment) |
-| NACL/security-group restrictions | Attempt direct EC2/RDS access from an unapproved source | Unapproved connections fail | Not run (no deployment) |
+| DNS and CloudFront alias | Resolve `assessment.zharifzhafran.xyz` and inspect distribution | DNS aliases CloudFront; distribution is deployed with the test alias | **Passed**: CNAME resolves to `d1azyxn7hsmugw.cloudfront.net`; status `Deployed` |
+| Viewer TLS and HTTP redirect | `curl -I https://assessment.zharifzhafran.xyz` and HTTP URL | Valid certificate, HTTPS response; HTTP redirects to HTTPS | **Passed**: TLS verify result 0; HTTP returned 301 to HTTPS |
+| WordPress/PHP and DB connection | Request `/wp-admin/install.php` through CloudFront | Installer returns successfully without PHP or DB connection errors | **Passed**: HTTP 200; installation has not been completed |
+| Canonical hostname | Follow homepage redirect | Redirect stays on assessment test hostname | **Passed**: final URL is `https://assessment.zharifzhafran.xyz/wp-admin/install.php` |
+| WAF | Request a script-injection query | WAF blocks the request | **Passed**: probe returned 403 |
+| CloudFront origin TLS | Request through CloudFront and inspect status/headers | HTTPS origin works without certificate mismatch or 502 | **Passed**: WordPress response served through CloudFront |
+| ALB target health | Inspect target group health | At least one WordPress EC2 target is healthy | **Passed**: replacement instance is healthy; rolling refresh is finishing old instance termination |
+| RDS configuration | Inspect RDS status and attributes | Available, Multi-AZ, encrypted, not public | **Passed** |
+| EFS configuration | Inspect file system and mount targets | Encrypted file system and mount targets in both AZs | **Passed** |
+| Log bucket protections | Inspect public access block and encryption | Buckets are private with server-side encryption | **Passed** |
+| ASG scale-out/scale-in action | Force CloudWatch alarms to ALARM and inspect ASG | One instance launches and later terminates; capacity respects bounds | **Passed as an action-path check**: forced alarm state scaled 1→2→1 and replacement target became healthy. This did not verify 30-minute CPU thresholds |
+| Direct origin restriction | Attempt ALB access outside CloudFront source ranges | Request is blocked by ALB security group | **Passed**: public-client connection timed out |
+| WordPress install, login, pretty permalinks | Complete installer and test admin-authenticated routes | Site setup and authenticated page behavior succeed | **Pending**: requires completing first-run installer |
+| Shared media across instances | Upload media, then access from another ASG instance | Upload is available across instances through EFS | **Pending**: requires a configured WordPress site and upload |
+| Cross-instance login/session | Sign in and route authenticated requests across ASG targets | Login cookie, nonce, and authenticated state remain valid across instances | **Pending**: requires an admin account and multi-instance traffic |
+| Sustained CPU scaling thresholds | Hold average CPU above 80% or below 40% for 30 minutes | ASG scales by one and respects bounds | **Not run**: alarm actions were forced; sustained CPU duration was not tested |
+| Private EC2/RDS reachability from unapproved source | Probe from an unapproved network | Connections are blocked | **Not separately probed**; deployed security-group rules were inspected |
 
 ## Reviewer notes
 
 - CloudFront needs a valid origin hostname and matching ALB certificate for origin HTTPS. If custom viewer aliases are used, their certificate must be attached to CloudFront from ACM in `us-east-1`.
-- The sample tfvars file contains deliberately fake IDs and ARNs. It is not an apply-ready environment configuration.
+- `terraform.tfvars` contains real environment inputs and is intentionally gitignored. It must not be committed.
 - Terraform state and provider plan files may contain sensitive values; keep them out of source control and the ZIP.
-- Plan was run with dummy credentials and fake IDs; rerun with real values and AWS credentials before deploying. Preserve `Not run (no deployment)` for live checks unless actually executed.
+- The live endpoint is for assessment testing. Complete WordPress first-run setup before testing admin, login, permalinks or uploads.
