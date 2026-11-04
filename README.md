@@ -95,6 +95,10 @@ For a plan-only review with example values, copy `terraform.tfvars.example` to a
 
 See [docs/TEST_PLAN.md](docs/TEST_PLAN.md) for the requirement-to-check matrix and recorded validation status.
 
+## Local WordPress demo
+
+`demo/` runs a sample school website (WordPress and MySQL in Docker) so the application tier can be seen working without AWS. It is separate from the Terraform deployment; see [demo/README.md](demo/README.md).
+
 ## Submission checklist
 
 - The assessment asks for the Terraform scripts, architecture/configuration/security documentation, system and module diagrams, and test plan/results together.
