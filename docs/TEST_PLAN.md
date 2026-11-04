@@ -46,13 +46,14 @@ Cost and teardown: Multi-AZ RDS, WAF and flow logs add cost. `deletion_protectio
 
 ## Post-deployment functional and security checks
 
-Live checks for the AWS test deployment. The homepage and all four subpages render the demo content. Authenticated admin flows and media-upload checks remain pending.
+Live checks for the AWS test deployment. The homepage and all four subpages render the demo content. Authenticated admin flows and media-upload checks remain pending; the steps to close them are in [LIVE_VERIFICATION.md](LIVE_VERIFICATION.md).
 
 | Check | Method | Expected result | Result |
 |---|---|---|---|
 | DNS and CloudFront alias | Resolve `assessment.zharifzhafran.xyz` and inspect distribution | DNS aliases CloudFront; distribution is deployed with the test alias | **Passed**: CNAME resolves to `d1azyxn7hsmugw.cloudfront.net`; status `Deployed` |
 | Viewer TLS and HTTP redirect | `curl -I https://assessment.zharifzhafran.xyz` and HTTP URL | Valid certificate, HTTPS response; HTTP redirects to HTTPS | **Passed**: TLS verify result 0; HTTP returned 301 to HTTPS |
 | WordPress/PHP and DB connection | Request homepage through CloudFront | WordPress serves the configured demo homepage without PHP or DB errors | **Passed**: homepage returned HTTP 200 with demo content and school styling |
+| Automated live checks | `scripts/verify-live.sh https://assessment.zharifzhafran.xyz` | Homepage and subpages 200, HTTP 301 to HTTPS, valid TLS, WAF 403 | **Passed** (rerun 5 Nov 2026): 9 passed, 0 failed |
 | Demo subpages/permalinks | Request `/about/`, `/academics/`, `/admissions/`, and `/contact/` | Each page returns HTTP 200 | **Passed** (rechecked 5 Nov 2026): `/`, `/about/`, `/academics/`, `/admissions/`, `/contact/` all returned HTTP 200 |
 | Canonical hostname | Inspect the homepage and page links | Site links use assessment test hostname | **Passed** on homepage and subpages |
 | WAF | Request a script-injection query | WAF blocks the request | **Passed**: probe returned 403 |

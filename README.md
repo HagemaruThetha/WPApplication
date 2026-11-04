@@ -2,6 +2,23 @@
 
 This repository contains the Terraform implementation for the school WordPress assessment, architecture/module diagrams, and a validation/test record. The AWS test deployment is live at [https://assessment.zharifzhafran.xyz](https://assessment.zharifzhafran.xyz). It uses a separate test hostname so the existing apex and `www` DNS records stay untouched. See [docs/TEST_PLAN.md](docs/TEST_PLAN.md) for checks performed and remaining manual WordPress setup.
 
+## Requirements traceability
+
+| Assessment requirement | Where it is met |
+|---|---|
+| Terraform provisioning, repeatable and version-controlled | `terraform/` root plus five modules; pinned providers and `.terraform.lock.hcl` |
+| CloudFront as CDN | `modules/cdn` (redirect to HTTPS, HTTPS-only origin, logging, geo allowlist) and `modules/waf` |
+| ALB across multiple instances | `modules/application`: ALB in two public subnets, HTTPS listener, target group |
+| EC2 with WordPress in an Auto Scaling Group, min 1 / max 4 | `modules/application`: launch template, ASG `min_size=1`, `max_size=4` |
+| Scale up above 80% CPU for 30 min, down below 40% for 30 min | `modules/application`: two CloudWatch alarms, 300 s period x 6 periods, tested in `plan.tftest.hcl` |
+| RDS MySQL | `modules/database`: private, encrypted, Multi-AZ, generated password in Secrets Manager |
+| HTTPS for CloudFront and ALB | CloudFront viewer redirect and HTTPS-only origin; ALB HTTPS listener with TLS 1.3/1.2 policy |
+| Security groups and network ACLs | `modules/network`: per-tier security groups and three NACLs |
+| IAM roles with minimum permissions | `modules/application`: instance role limited to reading one secret and decrypting its key |
+| Deliverable: Terraform scripts | `terraform/` |
+| Deliverable: architecture, configuration and security documentation | This README, with diagrams in `docs/diagrams/` |
+| Deliverable: test plan and results | [docs/TEST_PLAN.md](docs/TEST_PLAN.md), [live verification runbook](docs/LIVE_VERIFICATION.md), plan, checkov and trivy reports in `docs/` |
+
 ## Architecture
 
 ```mermaid
