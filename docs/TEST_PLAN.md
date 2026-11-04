@@ -56,7 +56,7 @@ Live checks for the AWS test deployment. WordPress itself is still at the first-
 | Canonical hostname | Follow homepage redirect | Redirect stays on assessment test hostname | **Passed**: final URL is `https://assessment.zharifzhafran.xyz/wp-admin/install.php` |
 | WAF | Request a script-injection query | WAF blocks the request | **Passed**: probe returned 403 |
 | CloudFront origin TLS | Request through CloudFront and inspect status/headers | HTTPS origin works without certificate mismatch or 502 | **Passed**: WordPress response served through CloudFront |
-| ALB target health | Inspect target group health | At least one WordPress EC2 target is healthy | **Passed**: replacement instance is healthy; rolling refresh is finishing old instance termination |
+| ALB target health | Inspect target group health | At least one WordPress EC2 target is healthy | **Passed**: replacement instance is healthy; rolling refresh completed and the old instance terminated |
 | RDS configuration | Inspect RDS status and attributes | Available, Multi-AZ, encrypted, not public | **Passed** |
 | EFS configuration | Inspect file system and mount targets | Encrypted file system and mount targets in both AZs | **Passed** |
 | Log bucket protections | Inspect public access block and encryption | Buckets are private with server-side encryption | **Passed** |

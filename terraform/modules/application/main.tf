@@ -97,6 +97,8 @@ resource "aws_lb_target_group" "wordpress" {
   protocol    = "HTTP"
   vpc_id      = var.vpc_id
   target_type = "instance"
+  # WordPress requests are short; drain briefly during rolling replacements.
+  deregistration_delay = 30
 
   health_check {
     enabled             = true
