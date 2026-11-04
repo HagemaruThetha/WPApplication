@@ -2,7 +2,7 @@
 
 ## Evidence status
 
-Static checks ran on Terraform v1.16.1 (AWS provider 6.62.0, random 3.9.1). A real test deployment was applied in AWS account `<account-id-redacted>`, region `ap-southeast-1`. The site is `https://assessment.zharifzhafran.xyz`; apex and `www` DNS were left unchanged. Terraform now initializes WordPress and imports the five demo pages and styling. The generated test-admin password is stored in Secrets Manager. Subpage routes were rechecked on 5 Nov 2026 and return HTTP 200. After that deployment, one NACL rule was added in code (HTTP from the app subnets to the NAT gateways in the public subnets); it has been validated and tested but not yet applied to the live stack. The deployment incurs AWS charges while it remains running. The original scratch plan used example values and dummy credentials and is not evidence of the live deployment.
+Static checks ran on Terraform v1.16.1 (AWS provider 6.62.0, random 3.9.1). A real test deployment was applied in AWS account `<account-id-redacted>`, region `ap-southeast-1`, then destroyed with `terraform destroy` on November 5, 2026: **97 Terraform-managed resources destroyed**. The AWS stack and WordPress database are currently absent. The site had used `https://assessment.zharifzhafran.xyz`; apex and `www` DNS were left unchanged. The ACM certificates and their validation records were retained for the next apply. Exabytes `assessment` and `origin` CNAMEs still point to the deleted CloudFront distribution and ALB; update them after Terraform recreates those endpoints. The local state and ignored `terraform.tfvars` were retained in the existing checkout. Three customer-managed KMS keys are scheduled for deletion after AWS's 7-day waiting period (November 12, 2026). Before teardown, the homepage and all subpages were verified. A final NACL rule for HTTP from app subnets to NAT gateways was added in code and validated, but was not applied to the destroyed stack; the next apply will include it.
 
 ## Static and plan-level checks
 
@@ -46,7 +46,7 @@ Cost and teardown: Multi-AZ RDS, WAF and flow logs add cost. `deletion_protectio
 
 ## Post-deployment functional and security checks
 
-Live checks for the AWS test deployment. The homepage and all four subpages render the demo content. Authenticated admin flows and media-upload checks remain pending; the steps to close them are in [LIVE_VERIFICATION.md](LIVE_VERIFICATION.md).
+The following are historical live checks performed before teardown. They do not indicate that the AWS endpoint is currently available. The homepage and all four subpages rendered the demo content before teardown. Authenticated admin flows and media-upload checks remain pending; the steps to close them are in [LIVE_VERIFICATION.md](LIVE_VERIFICATION.md).
 
 | Check | Method | Expected result | Result |
 |---|---|---|---|
@@ -58,13 +58,13 @@ Live checks for the AWS test deployment. The homepage and all four subpages rend
 | Canonical hostname | Inspect the homepage and page links | Site links use assessment test hostname | **Passed** on homepage and subpages |
 | WAF | Request a script-injection query | WAF blocks the request | **Passed**: probe returned 403 |
 | CloudFront origin TLS | Request through CloudFront and inspect status/headers | HTTPS origin works without certificate mismatch or 502 | **Passed**: WordPress response served through CloudFront |
-| ALB target health | Inspect target group health | At least one WordPress EC2 target is healthy | **Passed** on the previous version; latest refresh is still in progress |
+| ALB target health | Inspect target group health | At least one WordPress EC2 target is healthy | **Passed before teardown**: latest refresh completed with one healthy instance |
 | RDS configuration | Inspect RDS status and attributes | Available, Multi-AZ, encrypted, not public | **Passed** |
 | EFS configuration | Inspect file system and mount targets | Encrypted file system and mount targets in both AZs | **Passed** |
 | Log bucket protections | Inspect public access block and encryption | Buckets are private with server-side encryption | **Passed** |
 | ASG scale-out/scale-in action | Force CloudWatch alarms to ALARM and inspect ASG | One instance launches and later terminates; capacity respects bounds | **Passed as an action-path check**: forced alarm state scaled 1→2→1 and replacement target became healthy. This did not verify 30-minute CPU thresholds |
 | Direct origin restriction | Attempt ALB access outside CloudFront source ranges | Request is blocked by ALB security group | **Passed**: public-client connection timed out |
-| WordPress admin login | Sign in using the generated test-admin credentials | Admin login succeeds | **Pending**: credential is stored in the AWS database secret; login not yet exercised |
+| WordPress admin login | Sign in using the generated test-admin credentials | Admin login succeeds | **Not tested**: the admin credential and database secret were destroyed with the stack |
 | Shared media across instances | Upload media, then access from another ASG instance | Upload is available across instances through EFS | **Pending**: requires a configured WordPress site and upload |
 | Cross-instance login/session | Sign in and route authenticated requests across ASG targets | Login cookie, nonce, and authenticated state remain valid across instances | **Pending**: requires an admin account and multi-instance traffic |
 | Sustained CPU scaling thresholds | Hold average CPU above 80% or below 40% for 30 minutes | ASG scales by one and respects bounds | **Not run**: alarm actions were forced; sustained CPU duration was not tested |

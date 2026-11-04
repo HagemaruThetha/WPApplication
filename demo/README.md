@@ -14,4 +14,4 @@ python3 build_content.py             # regenerates content/*.html
 docker compose down -v               # stop and delete everything
 ```
 
-Passwords in `docker-compose.yml` are local demo-only values. The Docker copy does not exercise the AWS Terraform stack, ALB, CloudFront or autoscaling. The AWS test site is `https://assessment.zharifzhafran.xyz`; its generated admin credential is stored in the database secret in AWS Secrets Manager and must not be added to source control.
+Passwords in `docker-compose.yml` are local demo-only values. The Docker copy does not exercise the AWS Terraform stack, ALB, CloudFront or autoscaling. When the AWS stack is applied, the test site uses `https://assessment.zharifzhafran.xyz`; its generated admin credential is stored in Secrets Manager and must not be added to source control. The AWS stack is currently destroyed.

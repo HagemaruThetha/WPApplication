@@ -1,6 +1,6 @@
 # Xtremax Cloud Engineer Assessment — Terraform Submission
 
-This repository contains the Terraform implementation for the school WordPress assessment, architecture/module diagrams, and a validation/test record. The AWS test deployment is live at [https://assessment.zharifzhafran.xyz](https://assessment.zharifzhafran.xyz). It uses a separate test hostname so the existing apex and `www` DNS records stay untouched. See [docs/TEST_PLAN.md](docs/TEST_PLAN.md) for checks performed and remaining manual WordPress setup.
+This repository contains the Terraform implementation for the school WordPress assessment, architecture/module diagrams, and a validation/test record. The AWS test stack was destroyed after testing. To apply again, use this same checkout with its ignored local `terraform/terraform.tfvars` and `terraform/terraform.tfstate`; neither file is included in GitHub. The ACM certificates were retained, but the `assessment` and `origin` DNS records still point at the destroyed endpoints and need updating after the next apply. The existing apex and `www` records were left untouched. See [docs/TEST_PLAN.md](docs/TEST_PLAN.md) for test results and teardown details.
 
 ## Requirements traceability
 
