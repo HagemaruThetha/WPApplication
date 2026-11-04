@@ -1,0 +1,97 @@
+﻿# Xtremax Cloud Engineer Assessment — Terraform Submission
+
+This repository contains a Terraform implementation plan for the school WordPress assessment, a modular AWS configuration, architecture/module diagrams, and a validation/test record. The configuration is intended for review and `terraform plan`; no AWS resources have been applied by this submission.
+
+## Architecture
+
+```mermaid
+flowchart TD
+    Visitor[Website visitors] -->|HTTPS| CF[CloudFront CDN]
+    CF -->|HTTPS to origin| ALB[Public Application Load Balancer]
+    ALB -->|HTTP in private VPC| ASG[WordPress EC2 Auto Scaling Group\nmin 1 / max 4]
+    ASG -->|MySQL 3306| RDS[(Private RDS MySQL)]
+    ASG -->|Shared uploads NFS 2049| EFS[(Private EFS)]
+    ASG -->|GetSecretValue only| SM[Secrets Manager]
+```
+
+The assessment uses both “two-tier” and “three-tier” descriptions. This submission treats CloudFront as the edge layer, ALB plus WordPress as the web/application layer, and RDS as the data layer. Public and private subnet boundaries are documented in the Terraform network module. CloudFront redirects viewer HTTP to HTTPS and uses HTTPS to its custom origin. The ALB has an HTTPS listener only and its security group is limited to AWS’s CloudFront origin-facing managed prefix list; the app and DB security groups allow only the next required tier.
+
+WordPress uploads are on EFS so all EC2 instances share media during scale-out or replacement. WordPress core is pinned to version `7.1.4` so each new instance starts with the same application version; this was the latest stable release in the official archive on November 4, 2026 ([WordPress release archive](https://wordpress.org/download/releases/)). The bootstrap disables WordPress dashboard file edits and updates so plugins/themes cannot silently diverge across instances; deploy plugin/theme changes through a reviewed, consistent bootstrap or image update. RDS is private and uses a generated password stored in Secrets Manager. The secret also stores one generated set of WordPress authentication keys and salts shared by every instance, so logins and nonces remain valid across ASG nodes. The EC2 role can read only that secret. Terraform state can contain sensitive database values and auth keys, so protect local/remote state and never include state in source control or the ZIP.
+
+## Terraform structure
+
+```mermaid
+flowchart TD
+    Root[Root Terraform configuration]
+    Root --> Network[network: VPC, subnets, routes, NACLs, tier security groups]
+    Root --> Database[database: private RDS MySQL, subnet group, generated secret]
+    Root --> Application[application: ALB, WordPress launch template, ASG, scaling, EFS, IAM]
+    Root --> CDN[cdn: CloudFront distribution and HTTPS origin]
+    Network --> Database
+    Network --> Application
+    Database --> Application
+    Application --> CDN
+```
+
+The `network` module creates two AZs of public, private application, and private database subnets. App subnets use one NAT gateway per AZ for outbound package installation; database subnets have no internet default route. It creates an ALB, app, and DB security group plus subnet NACLs. The `database` module accepts private DB subnets and its pre-created security group. The `application` module accepts ALB/app groups and the database endpoint/secret ARN. The `cdn` module accepts a custom DNS origin alias routed to the ALB.
+
+| Module | Inputs | Outputs |
+|---|---|---|
+| `network` | Name prefix, VPC CIDR, two AZ names, CloudFront origin-facing prefix-list ID, tags | VPC ID, public/app/database subnet IDs, ALB/app/database security-group IDs |
+| `database` | Name prefix, DB name/user, instance class/storage, private DB subnet IDs, DB security group, backup settings, tags | RDS endpoint/port, secret ARN with generated DB credentials and shared WordPress auth keys, DB username |
+| `application` | VPC/subnets, ALB/app security groups, DB endpoint/name/user/secret ARN, website domain, AMI/instance type, ASG capacity and CPU rules, ALB certificate ARN, tags | ALB DNS name/zone ID, ASG name, EFS ID |
+| `cdn` | Name prefix, origin DNS name, canonical website domain, matching viewer alias and ACM certificate in `us-east-1`, tags | CloudFront distribution ID and domain name |
+
+Each module has `main.tf`, `variables.tf`, and `outputs.tf`. The root `main.tf` wires module outputs to downstream inputs. The sample inputs in `terraform.tfvars.example` are placeholders and must be replaced before deployment.
+
+The root configuration pins the HashiCorp AWS provider to `6.62.0` and the Random provider to `3.9.1` for repeatable provider selection ([AWS provider registry](https://registry.terraform.io/providers/hashicorp/aws/latest/docs), [Random provider registry](https://registry.terraform.io/providers/hashicorp/random/latest/docs)). The lock file was not generated because provider downloads were blocked in this environment. Run `terraform init` where the registry is reachable and include the generated `.terraform.lock.hcl` in the version-controlled submission.
+
+## Inputs to replace before deployment
+
+- `ami_id`: a current Amazon Linux 2023 AMI ID in `aws_region`.
+- `cloudfront_prefix_list_id`: the AWS-managed CloudFront origin-facing prefix-list ID for the selected AWS region.
+- `alb_certificate_arn`: an ACM certificate in `aws_region` covering the origin hostname.
+- `cloudfront_origin_domain_name`: a DNS name routed to the ALB and covered by that certificate.
+- `website_domain`: the canonical WordPress website hostname.
+- `cloudfront_aliases`: must include `website_domain`; set a matching `cloudfront_viewer_certificate_arn` from ACM in `us-east-1`.
+- DNS: route the origin hostname to the ALB and the viewer hostname to CloudFront. The assessment does not provide a domain or certificates.
+
+The CloudFront viewer certificate must be in `us-east-1` when using an ACM certificate, and the origin certificate must match the origin hostname CloudFront uses. See [CloudFront certificate requirements](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/cnames-and-https-requirements.html) and [HTTPS to a custom origin](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/using-https-cloudfront-to-custom-origin.html). The CloudFront origin request policy forwards viewer headers except `Host`, plus cookies and query strings, for WordPress behavior; the default cache policy disables object caching to avoid caching authenticated/dynamic pages. See [AWS managed origin request policies](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/using-managed-origin-request-policies.html).
+
+## Auto Scaling requirements
+
+The ASG is configured with minimum size **1**, maximum size **4**, and a configurable desired size between them. CloudWatch uses 5-minute EC2 CPU periods with 6 consecutive periods (30 minutes): scale out above 80%; scale in below 40%. Each action changes capacity by one. The actual min/max bounds prevent scale-in below one or scale-out above four.
+
+## Security controls
+
+- Viewer and CloudFront-to-origin links use HTTPS. CloudFront redirects viewer HTTP to HTTPS; the ALB itself exposes only its HTTPS listener and forwards to EC2 over HTTP inside the VPC.
+- The ALB security group accepts HTTPS only from the CloudFront origin-facing prefix list. The app group accepts HTTP from the ALB group and allows outbound NFS to EFS mount targets. The EFS group accepts NFS only from the app group. The DB group accepts MySQL only from the app group.
+- Network ACLs are subnet-scoped and include return/ephemeral traffic for the allowed paths. Security groups provide the narrower tier-to-tier stateful controls.
+- Application subnet rules allow TCP/UDP DNS queries only to the VPC resolver range; app security groups also allow DNS only to the VPC CIDR.
+- EC2 has no public IP. RDS has `publicly_accessible = false`, private subnet placement, encryption, and backups.
+- EC2 role permissions are limited to reading the one generated database secret. No AWS credentials are embedded in user data.
+- The launch template installs pinned WordPress 7.1.4, starts PHP-FPM and Apache, enables rewrite overrides, and retries secret/EFS access for transient startup failures. It retrieves a single shared set of WordPress authentication keys and salts from Secrets Manager so sessions work across ASG instances. Dashboard file editing/updates are disabled so code changes are deployed consistently. Apache `AllowOverride` is needed for WordPress permalinks on Amazon Linux 2023, as described in the [AWS AL2023 WordPress guide](https://docs.aws.amazon.com/linux/al2023/ug/hosting-wordpress-aml-2023.html).
+- The sample tfvars contains fake placeholders only. Terraform state is sensitive and excluded from the deliverable ZIP.
+
+## Commands
+
+Run from `terraform/` after replacing placeholder inputs and configuring AWS credentials for the account/region:
+
+This environment successfully ran Terraform formatting and parsed the WordPress bootstrap script with Git for Windows Bash. Provider installation was blocked because the Terraform Registry is unreachable from the sandbox; consequently, Terraform initialization, schema validation, and planning could not be completed here. See the actual results in [docs/TEST_PLAN.md](docs/TEST_PLAN.md).
+
+```powershell
+terraform fmt -check -recursive
+terraform init
+terraform validate
+terraform plan -var-file="terraform.tfvars"
+```
+
+For a plan-only review with example values, copy `terraform.tfvars.example` to a local `terraform.tfvars`, replace the placeholders with syntactically valid values, and use `terraform plan -refresh=false`. Do not run `terraform apply` unless you intentionally want to create billable AWS resources and have confirmed the account, region, and cost implications. A live deployment is not required by the assessment.
+
+See [docs/TEST_PLAN.md](docs/TEST_PLAN.md) for the requirement-to-check matrix and recorded validation status.
+
+## Submission checklist
+
+- The assessment asks for the Terraform scripts, architecture/configuration/security documentation, system and module diagrams, and test plan/results together.
+- This ZIP groups the Terraform files, this README, the test plan, and the implementation plan in one package. Send the deliverables together in one email by the assessment deadline: within four days of receiving the test case.
+- A live AWS deployment is not required. The assessment accepts Terraform plan output as evidence; because provider installation was blocked here, rerun init/validate/plan in an environment with registry access before submitting if possible.

@@ -1,0 +1,11 @@
+﻿# Replace placeholders with values for the AWS account and region you will use.
+# Keep real secrets, state files, and private material out of source control and ZIP files.
+aws_region                    = "ap-southeast-1"
+cloudfront_prefix_list_id     = "pl-0123456789abcdef0" # CloudFront origin-facing managed prefix list in this region
+ami_id                        = "ami-0123456789abcdef0" # Current Amazon Linux 2023 AMI in aws_region
+website_domain                = "school.example.com"
+wordpress_version             = "7.1.4"
+cloudfront_origin_domain_name  = "origin.school.example.com" # DNS record routed to the ALB
+alb_certificate_arn           = "arn:aws:acm:ap-southeast-1:111122223333:certificate/replace-me"
+cloudfront_aliases               = ["school.example.com"]
+cloudfront_viewer_certificate_arn = "arn:aws:acm:us-east-1:111122223333:certificate/00000000-0000-0000-0000-000000000000" # Placeholder only

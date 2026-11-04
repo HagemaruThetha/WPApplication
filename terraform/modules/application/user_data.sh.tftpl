@@ -1,0 +1,134 @@
+﻿#!/bin/bash
+set -euo pipefail
+
+DB_SECRET_ARN='${db_secret_arn}'
+DB_HOST='${db_endpoint}'
+DB_NAME='${db_name}'
+DB_USER='${db_username}'
+WEBSITE_DOMAIN='${website_domain}'
+EFS_ID='${efs_id}'
+AWS_REGION='${aws_region}'
+WORDPRESS_VERSION='${wordpress_version}'
+
+# Install jq before using it to parse the JSON secret.
+dnf update -y
+dnf install -y awscli-2 jq
+
+# Fetch only the application's database secret at boot. The secret value is not
+# embedded in this user-data template or launch-template configuration.
+umask 077
+secret_loaded=0
+for attempt in {1..12}; do
+  if aws secretsmanager get-secret-value \
+    --region "$AWS_REGION" \
+    --secret-id "$DB_SECRET_ARN" \
+    --query SecretString \
+    --output text > /root/db-secret.json; then
+    secret_loaded=1
+    break
+  fi
+  sleep 10
+done
+if [ "$secret_loaded" -ne 1 ]; then
+  echo "Unable to retrieve the WordPress database secret after retries." >&2
+  exit 1
+fi
+chmod 600 /root/db-secret.json
+DB_PASSWORD=$(jq -r '.password' /root/db-secret.json)
+for key in AUTH_KEY SECURE_AUTH_KEY LOGGED_IN_KEY NONCE_KEY AUTH_SALT SECURE_AUTH_SALT LOGGED_IN_SALT NONCE_SALT; do
+  value=$(jq -r --arg key "$key" '.auth_keys[$key]' /root/db-secret.json)
+  if [ -z "$value" ] || [ "$value" = "null" ]; then
+    echo "WordPress auth key $key is missing from the shared secret." >&2
+    exit 1
+  fi
+  printf -v "$key" '%s' "$value"
+done
+export AUTH_KEY SECURE_AUTH_KEY LOGGED_IN_KEY NONCE_KEY AUTH_SALT SECURE_AUTH_SALT LOGGED_IN_SALT NONCE_SALT
+rm -f /root/db-secret.json
+
+# Install WordPress and its runtime on Amazon Linux 2023.
+dnf install -y httpd php php-fpm php-mysqlnd php-gd php-xml php-mbstring php-zip php-curl php-json mariadb105 amazon-efs-utils wget tar
+
+mkdir -p /var/www/html
+cd /var/www/html
+wget -q "https://wordpress.org/wordpress-${WORDPRESS_VERSION}.tar.gz" -O /tmp/wordpress.tar.gz
+tar -xzf /tmp/wordpress.tar.gz --strip-components=1 -C /var/www/html
+rm -f /tmp/wordpress.tar.gz
+cp wp-config-sample.php wp-config.php
+
+# Configure WordPress to trust the TLS scheme forwarded by the ALB.
+sed -i "/\/\* That's all, stop editing/i if (isset(\$_SERVER['HTTP_X_FORWARDED_PROTO']) \&\& strpos(\$_SERVER['HTTP_X_FORWARDED_PROTO'], 'https') !== false) { \$_SERVER['HTTPS'] = 'on'; }" wp-config.php
+
+# Set DB connection values without exposing the password in Terraform inputs.
+export DB_NAME DB_USER DB_PASSWORD DB_HOST WEBSITE_DOMAIN
+python3 - <<'PY'
+import os
+import re
+
+path = "/var/www/html/wp-config.php"
+text = open(path, encoding="utf-8").read()
+
+def php_string(value):
+    return value.replace("\\", "\\\\").replace("'", "\\'")
+
+for key in ("DB_NAME", "DB_USER", "DB_PASSWORD", "DB_HOST"):
+    replacement = "define( '%s', '%s' );" % (key, php_string(os.environ[key]))
+    text, count = re.subn(r"define\(\s*'%s',\s*'[^']*'\s*\);" % key, replacement, text, count=1)
+    if count != 1:
+        raise SystemExit("Could not set WordPress database constant " + key)
+
+for key in ("AUTH_KEY", "SECURE_AUTH_KEY", "LOGGED_IN_KEY", "NONCE_KEY", "AUTH_SALT", "SECURE_AUTH_SALT", "LOGGED_IN_SALT", "NONCE_SALT"):
+    replacement = "define( '%s', '%s' );" % (key, php_string(os.environ[key]))
+    text, count = re.subn(r"define\(\s*'%s',\s*'[^']*'\s*\);" % key, replacement, text, count=1)
+    if count != 1:
+        raise SystemExit("Could not set WordPress authentication key " + key)
+
+domain = os.environ["WEBSITE_DOMAIN"]
+wp_urls = "define( 'WP_HOME', 'https://%s' );\ndefine( 'WP_SITEURL', 'https://%s' );\ndefine( 'DISALLOW_FILE_EDIT', true );\ndefine( 'DISALLOW_FILE_MODS', true );" % (
+    php_string(domain), php_string(domain)
+)
+marker = "/* That's all, stop editing! Happy publishing. */"
+if marker not in text:
+    raise SystemExit("Could not find the WordPress configuration insertion point")
+text = text.replace(marker, wp_urls + "\n\n" + marker, 1)
+
+open(path, "w", encoding="utf-8").write(text)
+PY
+
+# Allow WordPress .htaccess permalink rules within its document root.
+cat > /etc/httpd/conf.d/wordpress.conf <<'APACHE'
+<Directory "/var/www/html">
+    AllowOverride All
+    Require all granted
+</Directory>
+APACHE
+
+apachectl configtest
+unset DB_PASSWORD AUTH_KEY SECURE_AUTH_KEY LOGGED_IN_KEY NONCE_KEY AUTH_SALT SECURE_AUTH_SALT LOGGED_IN_SALT NONCE_SALT
+
+# Set local WordPress ownership before mounting shared uploads.
+chown -R apache:apache /var/www/html
+chmod 640 /var/www/html/wp-config.php
+
+# Persist uploaded media on encrypted shared EFS storage.
+mkdir -p /var/www/html/wp-content/uploads
+efs_mounted=0
+for attempt in {1..12}; do
+  if mount -t efs -o tls "$EFS_ID":/ /var/www/html/wp-content/uploads; then
+    efs_mounted=1
+    break
+  fi
+  sleep 10
+done
+if [ "$efs_mounted" -ne 1 ]; then
+  echo "Unable to mount shared WordPress uploads from EFS after retries." >&2
+  exit 1
+fi
+chown apache:apache /var/www/html/wp-content/uploads
+cat >> /etc/fstab <<EOF
+$EFS_ID:/ /var/www/html/wp-content/uploads efs _netdev,tls 0 0
+EOF
+
+systemctl enable --now php-fpm
+systemctl enable --now httpd
+systemctl restart php-fpm httpd
