@@ -17,6 +17,11 @@ resource "random_password" "database" {
   override_special = "!#%*-_=+?"
 }
 
+resource "random_password" "site_admin" {
+  length  = 32
+  special = false
+}
+
 resource "random_password" "wordpress_auth" {
   for_each = toset(local.wordpress_auth_keys)
 
@@ -48,9 +53,11 @@ resource "aws_secretsmanager_secret" "database" {
 resource "aws_secretsmanager_secret_version" "database" {
   secret_id = aws_secretsmanager_secret.database.id
   secret_string = jsonencode({
-    username = var.db_username
-    password = random_password.database.result
-    dbname   = var.db_name
+    username            = var.db_username
+    password            = random_password.database.result
+    dbname              = var.db_name
+    site_admin_username = "assessment-admin"
+    site_admin_password = random_password.site_admin.result
     auth_keys = {
       for key, value in random_password.wordpress_auth : key => value.result
     }

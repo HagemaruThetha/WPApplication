@@ -35,6 +35,12 @@ if [ "$secret_loaded" -ne 1 ]; then
 fi
 chmod 600 /root/db-secret.json
 DB_PASSWORD=$(jq -r '.password' /root/db-secret.json)
+SITE_ADMIN_USER=$(jq -r '.site_admin_username' /root/db-secret.json)
+SITE_ADMIN_PASSWORD=$(jq -r '.site_admin_password' /root/db-secret.json)
+if [ -z "$SITE_ADMIN_USER" ] || [ "$SITE_ADMIN_USER" = "null" ] || [ -z "$SITE_ADMIN_PASSWORD" ] || [ "$SITE_ADMIN_PASSWORD" = "null" ]; then
+  echo "WordPress site-admin credentials are missing from the shared secret." >&2
+  exit 1
+fi
 for key in AUTH_KEY SECURE_AUTH_KEY LOGGED_IN_KEY NONCE_KEY AUTH_SALT SECURE_AUTH_SALT LOGGED_IN_SALT NONCE_SALT; do
   value=$(jq -r --arg key "$key" '.auth_keys[$key]' /root/db-secret.json)
   if [ -z "$value" ] || [ "$value" = "null" ]; then
@@ -55,6 +61,20 @@ wget -q "https://wordpress.org/wordpress-$${WORDPRESS_VERSION}.tar.gz" -O /tmp/w
 tar -xzf /tmp/wordpress.tar.gz --strip-components=1 -C /var/www/html
 rm -f /tmp/wordpress.tar.gz
 cp wp-config-sample.php wp-config.php
+
+# Download WP-CLI and the school demo assets from a pinned repository revision.
+WP_CLI_URL='https://github.com/wp-cli/wp-cli/releases/download/v2.12.0/wp-cli-2.12.0.phar'
+curl -fSsL "$WP_CLI_URL" -o /usr/local/bin/wp
+chmod 755 /usr/local/bin/wp
+DEMO_RAW_BASE='https://raw.githubusercontent.com/HagemaruThetha/CloudThreeTierApp/dfd701f17dd08b90561d8210eb17d5965865dcdf/demo'
+mkdir -p /tmp/school-demo-content
+for page in home about academics admissions contact; do
+  curl -fSsL "$DEMO_RAW_BASE/content/$page.html" -o "/tmp/school-demo-content/$page.html"
+done
+curl -fSsL "$DEMO_RAW_BASE/mu-plugins/school-style.php" -o /tmp/school-demo-style.php
+install -d -o apache -g apache /var/www/html/wp-content/mu-plugins
+install -o apache -g apache -m 644 /tmp/school-demo-style.php /var/www/html/wp-content/mu-plugins/school-style.php
+rm -f /tmp/school-demo-style.php
 
 # Configure WordPress to trust the TLS scheme forwarded by the ALB.
 sed -i "/\/\* That's all, stop editing/i if (isset(\$_SERVER['HTTP_X_FORWARDED_PROTO']) \&\& strpos(\$_SERVER['HTTP_X_FORWARDED_PROTO'], 'https') !== false) { \$_SERVER['HTTPS'] = 'on'; }" wp-config.php
@@ -96,10 +116,20 @@ open(path, "w", encoding="utf-8").write(text)
 PY
 
 # Allow WordPress .htaccess permalink rules within its document root.
+if ! httpd -M 2>/dev/null | grep -q 'rewrite_module'; then
+  cat > /etc/httpd/conf.modules.d/00-rewrite.conf <<'APACHEMODULE'
+LoadModule rewrite_module modules/mod_rewrite.so
+APACHEMODULE
+fi
 cat > /etc/httpd/conf.d/wordpress.conf <<'APACHE'
 <Directory "/var/www/html">
     AllowOverride All
     Require all granted
+    RewriteEngine On
+    RewriteRule ^index\.php$ - [L]
+    RewriteCond %%{REQUEST_FILENAME} !-f
+    RewriteCond %%{REQUEST_FILENAME} !-d
+    RewriteRule . /index.php [L]
 </Directory>
 APACHE
 
@@ -128,6 +158,67 @@ chown apache:apache /var/www/html/wp-content/uploads
 cat >> /etc/fstab <<EOF
 $EFS_ID:/ /var/www/html/wp-content/uploads efs _netdev,tls 0 0
 EOF
+
+# Initialize WordPress once and publish the demo's pages. The ASG starts with
+# one node; later nodes reuse the shared database and ensure each page exists.
+WP=(runuser -u apache -- /usr/local/bin/wp --path=/var/www/html --url="https://$WEBSITE_DOMAIN")
+if ! "$${WP[@]}" core is-installed >/dev/null 2>&1; then
+  installed=0
+  for attempt in {1..30}; do
+    if "$${WP[@]}" core install \
+      --url="https://$WEBSITE_DOMAIN" \
+      --title="Harapan Bangsa School" \
+      --admin_user="$SITE_ADMIN_USER" \
+      --admin_password="$SITE_ADMIN_PASSWORD" \
+      --admin_email="assessment-admin@example.invalid" \
+      --skip-email; then
+      installed=1
+      break
+    fi
+    if "$${WP[@]}" core is-installed >/dev/null 2>&1; then
+      installed=1
+      break
+    fi
+    sleep 10
+  done
+  if [ "$installed" -ne 1 ]; then
+    echo "Unable to initialize WordPress after retries." >&2
+    exit 1
+  fi
+fi
+
+for page in home about academics admissions contact; do
+  case "$page" in
+    home) title="Home" ;;
+    about) title="About" ;;
+    academics) title="Academics" ;;
+    admissions) title="Admissions" ;;
+    contact) title="Contact" ;;
+  esac
+  page_id=$("$${WP[@]}" post list --post_type=page --name="$page" --field=ID --format=ids | tr -d '[:space:]')
+  if [ -z "$page_id" ]; then
+    page_content=$(cat "/tmp/school-demo-content/$page.html")
+    "$${WP[@]}" post create \
+      --post_type=page \
+      --post_title="$title" \
+      --post_name="$page" \
+      --post_status=publish \
+      --post_content="$page_content"
+  fi
+done
+home_id=$("$${WP[@]}" post list --post_type=page --name=home --field=ID --format=ids | tr -d '[:space:]')
+if [ -z "$home_id" ]; then
+  echo "The demo homepage was not created." >&2
+  exit 1
+fi
+"$${WP[@]}" option update blogname "Harapan Bangsa School"
+"$${WP[@]}" option update blogdescription "Where curious minds grow into confident leaders"
+"$${WP[@]}" option update show_on_front page
+"$${WP[@]}" option update page_on_front "$home_id"
+"$${WP[@]}" option update permalink_structure '/%postname%/'
+"$${WP[@]}" rewrite flush --hard
+unset SITE_ADMIN_USER SITE_ADMIN_PASSWORD
+rm -rf /tmp/school-demo-content
 
 systemctl enable --now php-fpm
 systemctl enable --now httpd

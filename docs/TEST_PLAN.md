@@ -2,7 +2,7 @@
 
 ## Evidence status
 
-Static checks ran on Terraform v1.16.1 (AWS provider 6.62.0, random 3.9.1). A real test deployment was applied in AWS account `217508296909`, region `ap-southeast-1`. The site is `https://assessment.zharifzhafran.xyz`; apex and `www` DNS were left unchanged. The final Terraform plan reports no differences. The CloudFront distribution and ACM certificate are deployed, and the endpoint responds over verified HTTPS. The WordPress installer is intentionally awaiting manual site setup; admin login, uploads, and authenticated flows therefore remain untested. The deployment incurs AWS charges while it remains running. The original scratch plan used example values and dummy credentials and is not evidence of the live deployment.
+Static checks ran on Terraform v1.16.1 (AWS provider 6.62.0, random 3.9.1). A real test deployment was applied in AWS account `217508296909`, region `ap-southeast-1`. The site is `https://assessment.zharifzhafran.xyz`; apex and `www` DNS were left unchanged. Terraform now initializes WordPress and imports the five demo pages and styling. The generated test-admin password is stored in Secrets Manager. The latest launch-template refresh for Apache permalink rules is in progress, so the subpage routes still need a final check. The deployment incurs AWS charges while it remains running. The original scratch plan used example values and dummy credentials and is not evidence of the live deployment.
 
 ## Static and plan-level checks
 
@@ -46,23 +46,24 @@ Cost and teardown: Multi-AZ RDS, WAF and flow logs add cost. `deletion_protectio
 
 ## Post-deployment functional and security checks
 
-Live checks for the AWS test deployment. WordPress itself is still at the first-run installer, so checks that require a configured site or admin account are pending.
+Live checks for the AWS test deployment. The homepage renders the demo content; the latest instance refresh is applying explicit Apache permalink rules. Authenticated admin flows and media-upload checks remain pending.
 
 | Check | Method | Expected result | Result |
 |---|---|---|---|
 | DNS and CloudFront alias | Resolve `assessment.zharifzhafran.xyz` and inspect distribution | DNS aliases CloudFront; distribution is deployed with the test alias | **Passed**: CNAME resolves to `d1azyxn7hsmugw.cloudfront.net`; status `Deployed` |
 | Viewer TLS and HTTP redirect | `curl -I https://assessment.zharifzhafran.xyz` and HTTP URL | Valid certificate, HTTPS response; HTTP redirects to HTTPS | **Passed**: TLS verify result 0; HTTP returned 301 to HTTPS |
-| WordPress/PHP and DB connection | Request `/wp-admin/install.php` through CloudFront | Installer returns successfully without PHP or DB connection errors | **Passed**: HTTP 200; installation has not been completed |
-| Canonical hostname | Follow homepage redirect | Redirect stays on assessment test hostname | **Passed**: final URL is `https://assessment.zharifzhafran.xyz/wp-admin/install.php` |
+| WordPress/PHP and DB connection | Request homepage through CloudFront | WordPress serves the configured demo homepage without PHP or DB errors | **Passed**: homepage returned HTTP 200 with demo content and school styling |
+| Demo subpages/permalinks | Request `/about/`, `/academics/`, `/admissions/`, and `/contact/` | Each page returns HTTP 200 | **Pending**: explicit Apache rewrite fix is in the latest instance refresh |
+| Canonical hostname | Inspect the homepage and page links | Site links use assessment test hostname | **Passed** on homepage; subpage route verification pending |
 | WAF | Request a script-injection query | WAF blocks the request | **Passed**: probe returned 403 |
 | CloudFront origin TLS | Request through CloudFront and inspect status/headers | HTTPS origin works without certificate mismatch or 502 | **Passed**: WordPress response served through CloudFront |
-| ALB target health | Inspect target group health | At least one WordPress EC2 target is healthy | **Passed**: replacement instance is healthy; rolling refresh completed and the old instance terminated |
+| ALB target health | Inspect target group health | At least one WordPress EC2 target is healthy | **Passed** on the previous version; latest refresh is still in progress |
 | RDS configuration | Inspect RDS status and attributes | Available, Multi-AZ, encrypted, not public | **Passed** |
 | EFS configuration | Inspect file system and mount targets | Encrypted file system and mount targets in both AZs | **Passed** |
 | Log bucket protections | Inspect public access block and encryption | Buckets are private with server-side encryption | **Passed** |
 | ASG scale-out/scale-in action | Force CloudWatch alarms to ALARM and inspect ASG | One instance launches and later terminates; capacity respects bounds | **Passed as an action-path check**: forced alarm state scaled 1→2→1 and replacement target became healthy. This did not verify 30-minute CPU thresholds |
 | Direct origin restriction | Attempt ALB access outside CloudFront source ranges | Request is blocked by ALB security group | **Passed**: public-client connection timed out |
-| WordPress install, login, pretty permalinks | Complete installer and test admin-authenticated routes | Site setup and authenticated page behavior succeed | **Pending**: requires completing first-run installer |
+| WordPress admin login | Sign in using the generated test-admin credentials | Admin login succeeds | **Pending**: credential is stored in the AWS database secret; login not yet exercised |
 | Shared media across instances | Upload media, then access from another ASG instance | Upload is available across instances through EFS | **Pending**: requires a configured WordPress site and upload |
 | Cross-instance login/session | Sign in and route authenticated requests across ASG targets | Login cookie, nonce, and authenticated state remain valid across instances | **Pending**: requires an admin account and multi-instance traffic |
 | Sustained CPU scaling thresholds | Hold average CPU above 80% or below 40% for 30 minutes | ASG scales by one and respects bounds | **Not run**: alarm actions were forced; sustained CPU duration was not tested |

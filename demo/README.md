@@ -1,6 +1,8 @@
-# Local WordPress demo (not part of the Terraform deployment)
+# WordPress school-site demo
 
-Runs a school website on WordPress and MySQL in Docker so the application and database tiers can be seen working without AWS.
+Contains sample pages and styling for the Harapan Bangsa School demo. The Terraform launch template downloads these files from a pinned repository revision, initializes WordPress on the AWS test hostname, and publishes the pages. Content is fictional and for assessment/demo use.
+
+For an isolated local copy, run WordPress and MySQL in Docker:
 
 ```bash
 cd demo
@@ -12,4 +14,4 @@ python3 build_content.py             # regenerates content/*.html
 docker compose down -v               # stop and delete everything
 ```
 
-Passwords in `docker-compose.yml` are demo-only values. This demo does not exercise the Terraform code, ALB, CloudFront or autoscaling.
+Passwords in `docker-compose.yml` are local demo-only values. The Docker copy does not exercise the AWS Terraform stack, ALB, CloudFront or autoscaling. The AWS test site is `https://assessment.zharifzhafran.xyz`; its generated admin credential is stored in the database secret in AWS Secrets Manager and must not be added to source control.
