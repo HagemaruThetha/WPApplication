@@ -51,7 +51,7 @@ dnf install -y httpd php php-fpm php-mysqlnd php-gd php-xml php-mbstring php-zip
 
 mkdir -p /var/www/html
 cd /var/www/html
-wget -q "https://wordpress.org/wordpress-${WORDPRESS_VERSION}.tar.gz" -O /tmp/wordpress.tar.gz
+wget -q "https://wordpress.org/wordpress-$${WORDPRESS_VERSION}.tar.gz" -O /tmp/wordpress.tar.gz
 tar -xzf /tmp/wordpress.tar.gz --strip-components=1 -C /var/www/html
 rm -f /tmp/wordpress.tar.gz
 cp wp-config-sample.php wp-config.php

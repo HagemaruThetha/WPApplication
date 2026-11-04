@@ -20,34 +20,48 @@ module "database" {
   db_security_group_id    = module.network.db_security_group_id
   backup_retention_period = var.db_backup_retention_days
   multi_az                = var.db_multi_az
+  deletion_protection     = var.deletion_protection
   tags                    = local.common_tags
 }
 
 module "application" {
   source = "./modules/application"
 
-  name_prefix              = local.name_prefix
-  vpc_id                   = module.network.vpc_id
-  public_subnet_ids        = module.network.public_subnet_ids
-  app_subnet_ids           = module.network.app_subnet_ids
-  alb_security_group_id    = module.network.alb_security_group_id
-  app_security_group_id    = module.network.app_security_group_id
-  db_endpoint              = module.database.endpoint
-  db_name                  = var.db_name
-  db_username              = module.database.username
-  db_secret_arn            = module.database.secret_arn
-  website_domain           = var.website_domain
-  wordpress_version        = var.wordpress_version
-  instance_type            = var.instance_type
-  ami_id                   = var.ami_id
-  min_size                 = 1
-  max_size                 = 4
-  desired_capacity         = var.desired_capacity
-  scale_out_cpu_threshold  = 80
-  scale_in_cpu_threshold   = 40
-  scale_evaluation_periods = 6
-  alb_certificate_arn      = var.alb_certificate_arn
-  tags                     = local.common_tags
+  name_prefix                = local.name_prefix
+  vpc_id                     = module.network.vpc_id
+  public_subnet_ids          = module.network.public_subnet_ids
+  app_subnet_ids             = module.network.app_subnet_ids
+  alb_security_group_id      = module.network.alb_security_group_id
+  app_security_group_id      = module.network.app_security_group_id
+  db_endpoint                = module.database.endpoint
+  db_name                    = var.db_name
+  db_username                = module.database.username
+  db_secret_arn              = module.database.secret_arn
+  db_kms_key_arn             = module.database.kms_key_arn
+  enable_deletion_protection = var.deletion_protection
+  website_domain             = var.website_domain
+  wordpress_version          = var.wordpress_version
+  instance_type              = var.instance_type
+  ami_id                     = var.ami_id
+  min_size                   = 1
+  max_size                   = 4
+  desired_capacity           = var.desired_capacity
+  scale_out_cpu_threshold    = 80
+  scale_in_cpu_threshold     = 40
+  scale_evaluation_periods   = 6
+  alb_certificate_arn        = var.alb_certificate_arn
+  tags                       = local.common_tags
+}
+
+module "waf" {
+  source = "./modules/waf"
+
+  name_prefix = local.name_prefix
+  tags        = local.common_tags
+
+  providers = {
+    aws = aws.us_east_1
+  }
 }
 
 module "cdn" {
@@ -58,5 +72,8 @@ module "cdn" {
   website_domain         = var.website_domain
   aliases                = var.cloudfront_aliases
   viewer_certificate_arn = var.cloudfront_viewer_certificate_arn
-  tags                   = local.common_tags
+  geo_allowlist          = var.cloudfront_geo_allowlist
+
+  web_acl_arn = module.waf.web_acl_arn
+  tags        = local.common_tags
 }

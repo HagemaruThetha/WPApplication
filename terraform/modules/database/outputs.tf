@@ -17,3 +17,8 @@ output "username" {
   description = "RDS master username."
   value       = var.db_username
 }
+
+output "kms_key_arn" {
+  description = "KMS key ARN that encrypts the database secret; the application role needs kms:Decrypt on it."
+  value       = aws_kms_key.secrets.arn
+}

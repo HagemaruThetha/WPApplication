@@ -1,4 +1,70 @@
+data "aws_caller_identity" "current" {}
+
+# Log-storage bucket: server access logging would recurse.
+#trivy:ignore:AWS-0089
+resource "aws_s3_bucket" "logs" {
+  bucket        = "${var.name_prefix}-cf-logs-${data.aws_caller_identity.current.account_id}"
+  force_destroy = true
+  tags          = var.tags
+}
+
+resource "aws_s3_bucket_ownership_controls" "logs" {
+  bucket = aws_s3_bucket.logs.id
+  rule {
+    object_ownership = "BucketOwnerPreferred"
+  }
+}
+
+resource "aws_s3_bucket_acl" "logs" {
+  bucket     = aws_s3_bucket.logs.id
+  acl        = "private"
+  depends_on = [aws_s3_bucket_ownership_controls.logs]
+}
+
+resource "aws_s3_bucket_public_access_block" "logs" {
+  bucket                  = aws_s3_bucket.logs.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_versioning" "logs" {
+  bucket = aws_s3_bucket.logs.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+# SSE-S3 is required for ELB/CloudFront log delivery.
+#trivy:ignore:AWS-0132
+resource "aws_s3_bucket_server_side_encryption_configuration" "logs" {
+  bucket = aws_s3_bucket.logs.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "logs" {
+  bucket = aws_s3_bucket.logs.id
+  rule {
+    id     = "expire-logs"
+    status = "Enabled"
+    filter {}
+    expiration {
+      days = 90
+    }
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
+  }
+}
+
 resource "aws_cloudfront_distribution" "this" {
+  #checkov:skip=CKV_AWS_310:Single ALB origin; origin failover needs a second origin, out of scope.
+  web_acl_id          = var.web_acl_arn
   enabled             = true
   comment             = "${var.name_prefix} WordPress distribution"
   aliases             = var.aliases
@@ -31,9 +97,16 @@ resource "aws_cloudfront_distribution" "this" {
     origin_request_policy_id = "b689b0a8-53d0-40ab-baf2-68738e2966ac"
   }
 
+  logging_config {
+    bucket          = aws_s3_bucket.logs.bucket_domain_name
+    prefix          = "cloudfront/"
+    include_cookies = false
+  }
+
   restrictions {
     geo_restriction {
-      restriction_type = "none"
+      restriction_type = length(var.geo_allowlist) > 0 ? "whitelist" : "none"
+      locations        = var.geo_allowlist
     }
   }
 

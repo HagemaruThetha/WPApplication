@@ -28,3 +28,14 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "geo_allowlist" {
+  description = "ISO country codes allowed to reach the site. Empty list disables geo restriction."
+  type        = list(string)
+  default     = ["ID", "SG", "MY"]
+}
+
+variable "web_acl_arn" {
+  description = "ARN of a CLOUDFRONT-scope WAFv2 web ACL to attach."
+  type        = string
+}

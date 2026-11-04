@@ -64,7 +64,7 @@ variable "backup_retention_period" {
 variable "multi_az" {
   description = "Whether to enable a standby DB instance in another AZ. This increases cost if applied."
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "tags" {
@@ -74,3 +74,9 @@ variable "tags" {
 }
 
 
+
+variable "deletion_protection" {
+  description = "Protect the RDS instance from deletion and take a final snapshot. Set false before terraform destroy."
+  type        = bool
+  default     = true
+}

@@ -140,3 +140,14 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "db_kms_key_arn" {
+  description = "KMS key ARN encrypting the database secret; the instance role is allowed kms:Decrypt on it only."
+  type        = string
+}
+
+variable "enable_deletion_protection" {
+  description = "Enable ALB deletion protection. Set false before terraform destroy."
+  type        = bool
+  default     = true
+}

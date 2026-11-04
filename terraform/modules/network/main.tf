@@ -50,6 +50,77 @@ resource "aws_vpc" "this" {
   tags = merge(local.common_tags, { Name = "${var.name_prefix}-vpc" })
 }
 
+resource "aws_cloudwatch_log_group" "flow" {
+  name              = "/vpc/${var.name_prefix}/flow-logs"
+  retention_in_days = 365
+  kms_key_id        = aws_kms_key.flow.arn
+  tags              = var.tags
+}
+
+resource "aws_kms_key" "flow" {
+  description             = "${var.name_prefix} VPC flow logs"
+  enable_key_rotation     = true
+  deletion_window_in_days = 7
+  tags                    = var.tags
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "AccountAdmin"
+        Effect    = "Allow"
+        Principal = { AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root" }
+        Action    = "kms:*"
+        Resource  = "*"
+      },
+      {
+        Sid       = "AllowCloudWatchLogs"
+        Effect    = "Allow"
+        Principal = { Service = "logs.${data.aws_region.current.region}.amazonaws.com" }
+        Action    = ["kms:Encrypt*", "kms:Decrypt*", "kms:ReEncrypt*", "kms:GenerateDataKey*", "kms:Describe*"]
+        Resource  = "*"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role" "flow" {
+  name = "${var.name_prefix}-vpc-flow-logs"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "vpc-flow-logs.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+  tags = var.tags
+}
+
+resource "aws_iam_role_policy" "flow" {
+  name = "${var.name_prefix}-vpc-flow-logs"
+  role = aws_iam_role.flow.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["logs:CreateLogStream", "logs:PutLogEvents", "logs:DescribeLogStreams"]
+      Resource = "${aws_cloudwatch_log_group.flow.arn}:*"
+    }]
+  })
+}
+
+resource "aws_flow_log" "vpc" {
+  vpc_id          = aws_vpc.this.id
+  traffic_type    = "ALL"
+  iam_role_arn    = aws_iam_role.flow.arn
+  log_destination = aws_cloudwatch_log_group.flow.arn
+  tags            = var.tags
+}
+
+data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
+
 resource "aws_internet_gateway" "this" {
   vpc_id = aws_vpc.this.id
   tags   = merge(local.common_tags, { Name = "${var.name_prefix}-igw" })
@@ -180,6 +251,7 @@ resource "aws_security_group" "app" {
 }
 
 resource "aws_vpc_security_group_ingress_rule" "app_from_alb" {
+  #checkov:skip=CKV_AWS_260:Source is the ALB security group, not 0.0.0.0/0.
   security_group_id            = aws_security_group.app.id
   referenced_security_group_id = aws_security_group.alb.id
   description                  = "HTTP from the ALB target group."
@@ -197,6 +269,8 @@ resource "aws_vpc_security_group_egress_rule" "alb_to_app" {
   to_port                      = 80
 }
 
+# Needed for OS and WordPress package downloads through NAT; limited to ports 80/443.
+#trivy:ignore:AWS-0104
 resource "aws_vpc_security_group_egress_rule" "app_web_egress" {
   for_each = toset(["80", "443"])
 

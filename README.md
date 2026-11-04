@@ -26,11 +26,13 @@ flowchart TD
     Root --> Network[network: VPC, subnets, routes, NACLs, tier security groups]
     Root --> Database[database: private RDS MySQL, subnet group, generated secret]
     Root --> Application[application: ALB, WordPress launch template, ASG, scaling, EFS, IAM]
-    Root --> CDN[cdn: CloudFront distribution and HTTPS origin]
+    Root --> WAF[waf: CloudFront WAFv2 web ACL in us-east-1]
+    Root --> CDN[cdn: CloudFront distribution, logging and HTTPS origin]
     Network --> Database
     Network --> Application
     Database --> Application
     Application --> CDN
+    WAF --> CDN
 ```
 
 The `network` module creates two AZs of public, private application, and private database subnets. App subnets use one NAT gateway per AZ for outbound package installation; database subnets have no internet default route. It creates an ALB, app, and DB security group plus subnet NACLs. The `database` module accepts private DB subnets and its pre-created security group. The `application` module accepts ALB/app groups and the database endpoint/secret ARN. The `cdn` module accepts a custom DNS origin alias routed to the ALB.
@@ -38,13 +40,14 @@ The `network` module creates two AZs of public, private application, and private
 | Module | Inputs | Outputs |
 |---|---|---|
 | `network` | Name prefix, VPC CIDR, two AZ names, CloudFront origin-facing prefix-list ID, tags | VPC ID, public/app/database subnet IDs, ALB/app/database security-group IDs |
-| `database` | Name prefix, DB name/user, instance class/storage, private DB subnet IDs, DB security group, backup settings, tags | RDS endpoint/port, secret ARN with generated DB credentials and shared WordPress auth keys, DB username |
-| `application` | VPC/subnets, ALB/app security groups, DB endpoint/name/user/secret ARN, website domain, AMI/instance type, ASG capacity and CPU rules, ALB certificate ARN, tags | ALB DNS name/zone ID, ASG name, EFS ID |
-| `cdn` | Name prefix, origin DNS name, canonical website domain, matching viewer alias and ACM certificate in `us-east-1`, tags | CloudFront distribution ID and domain name |
+| `database` | Name prefix, DB name/user, instance class/storage, private DB subnet IDs, DB security group, backup settings, tags | RDS endpoint/port, KMS key ARN, secret ARN with generated DB credentials and shared WordPress auth keys, DB username |
+| `application` | VPC/subnets, ALB/app security groups, DB endpoint/name/user/secret ARN, DB secret KMS key ARN, website domain, AMI/instance type, ASG capacity and CPU rules, ALB certificate ARN, tags | ALB DNS name/zone ID, ASG name, EFS ID |
+| `waf` | Name prefix, tags | Web ACL ARN (created with the `us-east-1` provider alias) |
+| `cdn` | Name prefix, origin DNS name, canonical website domain, matching viewer alias and ACM certificate in `us-east-1`, WAF web ACL ARN, geo allowlist, tags | CloudFront distribution ID and domain name |
 
 Each module has `main.tf`, `variables.tf`, and `outputs.tf`. The root `main.tf` wires module outputs to downstream inputs. The sample inputs in `terraform.tfvars.example` are placeholders and must be replaced before deployment.
 
-The root configuration pins the HashiCorp AWS provider to `6.62.0` and the Random provider to `3.9.1` for repeatable provider selection ([AWS provider registry](https://registry.terraform.io/providers/hashicorp/aws/latest/docs), [Random provider registry](https://registry.terraform.io/providers/hashicorp/random/latest/docs)). The lock file was not generated because provider downloads were blocked in this environment. Run `terraform init` where the registry is reachable and include the generated `.terraform.lock.hcl` in the version-controlled submission.
+The root configuration pins the HashiCorp AWS provider to `6.62.0` and the Random provider to `3.9.1` for repeatable provider selection ([AWS provider registry](https://registry.terraform.io/providers/hashicorp/aws/latest/docs), [Random provider registry](https://registry.terraform.io/providers/hashicorp/random/latest/docs)). `terraform/.terraform.lock.hcl` is included; commit it.
 
 ## Inputs to replace before deployment
 
@@ -71,16 +74,18 @@ The ASG is configured with minimum size **1**, maximum size **4**, and a configu
 - EC2 has no public IP. RDS has `publicly_accessible = false`, private subnet placement, encryption, and backups.
 - EC2 role permissions are limited to reading the one generated database secret. No AWS credentials are embedded in user data.
 - The launch template installs pinned WordPress 7.1.4, starts PHP-FPM and Apache, enables rewrite overrides, and retries secret/EFS access for transient startup failures. It retrieves a single shared set of WordPress authentication keys and salts from Secrets Manager so sessions work across ASG instances. Dashboard file editing/updates are disabled so code changes are deployed consistently. Apache `AllowOverride` is needed for WordPress permalinks on Amazon Linux 2023, as described in the [AWS AL2023 WordPress guide](https://docs.aws.amazon.com/linux/al2023/ug/hosting-wordpress-aml-2023.html).
+- Hardening: customer-managed KMS keys (database secret, EFS, flow logs), VPC flow logs, ALB and CloudFront access logs in private S3 buckets, WAFv2 managed rules with rate limiting, CloudFront geo allowlist (default ID/SG/MY, `cloudfront_geo_allowlist`), Multi-AZ RDS with enhanced monitoring, and deletion protection on RDS and the ALB. Set `deletion_protection = false` and apply before `terraform destroy`.
 - The sample tfvars contains fake placeholders only. Terraform state is sensitive and excluded from the deliverable ZIP.
 
 ## Commands
 
 Run from `terraform/` after replacing placeholder inputs and configuring AWS credentials for the account/region:
 
-This environment successfully ran Terraform formatting and parsed the WordPress bootstrap script with Git for Windows Bash. Provider installation was blocked because the Terraform Registry is unreachable from the sandbox; consequently, Terraform initialization, schema validation, and planning could not be completed here. See the actual results in [docs/TEST_PLAN.md](docs/TEST_PLAN.md).
+`terraform fmt`, `init`, `validate` and a `plan` (96 resources to add) all pass; see [docs/TEST_PLAN.md](docs/TEST_PLAN.md) and [docs/terraform-plan-output.txt](docs/terraform-plan-output.txt).
 
 ```powershell
 terraform fmt -check -recursive
+terraform test
 terraform init
 terraform validate
 terraform plan -var-file="terraform.tfvars"
@@ -94,4 +99,4 @@ See [docs/TEST_PLAN.md](docs/TEST_PLAN.md) for the requirement-to-check matrix a
 
 - The assessment asks for the Terraform scripts, architecture/configuration/security documentation, system and module diagrams, and test plan/results together.
 - This ZIP groups the Terraform files, this README, the test plan, and the implementation plan in one package. Send the deliverables together in one email by the assessment deadline: within four days of receiving the test case.
-- A live AWS deployment is not required. The assessment accepts Terraform plan output as evidence; because provider installation was blocked here, rerun init/validate/plan in an environment with registry access before submitting if possible.
+- A live AWS deployment is not required. The assessment accepts Terraform plan output as evidence.

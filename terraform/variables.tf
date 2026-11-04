@@ -68,9 +68,9 @@ variable "db_backup_retention_days" {
 }
 
 variable "db_multi_az" {
-  description = "Enable a standby RDS instance for higher availability (increases cost)."
+  description = "Enable a standby RDS instance for higher availability (default on; increases cost)."
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "instance_type" {
@@ -123,4 +123,16 @@ variable "cloudfront_aliases" {
 variable "cloudfront_viewer_certificate_arn" {
   description = "Required ACM certificate ARN in us-east-1 covering cloudfront_aliases."
   type        = string
+}
+
+variable "deletion_protection" {
+  description = "Deletion protection on RDS and the ALB (and a final RDS snapshot). Set false before terraform destroy."
+  type        = bool
+  default     = true
+}
+
+variable "cloudfront_geo_allowlist" {
+  description = "ISO country codes allowed to reach the site through CloudFront. Empty list disables geo restriction."
+  type        = list(string)
+  default     = ["ID", "SG", "MY"]
 }

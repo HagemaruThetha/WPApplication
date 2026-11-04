@@ -2,6 +2,77 @@ locals {
   common_tags = merge(var.tags, { Name = var.name_prefix })
 }
 
+data "aws_caller_identity" "current" {}
+data "aws_elb_service_account" "main" {}
+
+# Log-storage bucket: server access logging would recurse.
+#trivy:ignore:AWS-0089
+resource "aws_s3_bucket" "alb_logs" {
+  bucket        = "${var.name_prefix}-alb-logs-${data.aws_caller_identity.current.account_id}"
+  force_destroy = true
+  tags          = local.common_tags
+}
+
+resource "aws_s3_bucket_public_access_block" "alb_logs" {
+  bucket                  = aws_s3_bucket.alb_logs.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_versioning" "alb_logs" {
+  bucket = aws_s3_bucket.alb_logs.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+# SSE-S3 is required for ELB/CloudFront log delivery.
+#trivy:ignore:AWS-0132
+resource "aws_s3_bucket_server_side_encryption_configuration" "alb_logs" {
+  bucket = aws_s3_bucket.alb_logs.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "alb_logs" {
+  bucket = aws_s3_bucket.alb_logs.id
+  rule {
+    id     = "expire-logs"
+    status = "Enabled"
+    filter {}
+    expiration {
+      days = 90
+    }
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
+  }
+}
+
+data "aws_iam_policy_document" "alb_logs" {
+  statement {
+    actions   = ["s3:PutObject"]
+    resources = ["${aws_s3_bucket.alb_logs.arn}/alb/AWSLogs/${data.aws_caller_identity.current.account_id}/*"]
+    principals {
+      type        = "AWS"
+      identifiers = [data.aws_elb_service_account.main.arn]
+    }
+  }
+}
+
+resource "aws_s3_bucket_policy" "alb_logs" {
+  bucket     = aws_s3_bucket.alb_logs.id
+  policy     = data.aws_iam_policy_document.alb_logs.json
+  depends_on = [aws_s3_bucket_public_access_block.alb_logs]
+}
+
+# Internet-facing by design: CloudFront origin; the ALB security group only allows the CloudFront prefix list.
+#trivy:ignore:AWS-0053
 resource "aws_lb" "wordpress" {
   name                       = substr("${var.name_prefix}-alb", 0, 32)
   internal                   = false
@@ -9,6 +80,13 @@ resource "aws_lb" "wordpress" {
   security_groups            = [var.alb_security_group_id]
   subnets                    = var.public_subnet_ids
   drop_invalid_header_fields = true
+  enable_deletion_protection = var.enable_deletion_protection
+
+  access_logs {
+    bucket  = aws_s3_bucket.alb_logs.id
+    prefix  = "alb"
+    enabled = true
+  }
 
   tags = local.common_tags
 }
@@ -47,9 +125,17 @@ resource "aws_lb_listener" "https" {
   }
 }
 
+resource "aws_kms_key" "efs" {
+  description             = "${var.name_prefix} WordPress uploads (EFS)"
+  enable_key_rotation     = true
+  deletion_window_in_days = 7
+  tags                    = local.common_tags
+}
+
 resource "aws_efs_file_system" "wordpress" {
   creation_token = "${var.name_prefix}-wordpress-uploads"
   encrypted      = true
+  kms_key_id     = aws_kms_key.efs.arn
 
   lifecycle_policy {
     transition_to_ia = "AFTER_30_DAYS"
@@ -86,10 +172,10 @@ resource "aws_vpc_security_group_egress_rule" "app_to_efs" {
 }
 
 resource "aws_efs_mount_target" "wordpress" {
-  for_each = toset(var.app_subnet_ids)
+  count = length(var.app_subnet_ids)
 
   file_system_id  = aws_efs_file_system.wordpress.id
-  subnet_id       = each.value
+  subnet_id       = var.app_subnet_ids[count.index]
   security_groups = [aws_security_group.efs.id]
 }
 
@@ -118,6 +204,10 @@ resource "aws_iam_role_policy" "read_db_secret" {
       Effect   = "Allow"
       Action   = ["secretsmanager:GetSecretValue"]
       Resource = var.db_secret_arn
+      }, {
+      Effect   = "Allow"
+      Action   = ["kms:Decrypt"]
+      Resource = var.db_kms_key_arn
     }]
   })
 }
@@ -134,7 +224,7 @@ resource "aws_launch_template" "wordpress" {
   instance_type          = var.instance_type
   update_default_version = true
   user_data = base64encode(templatefile("${path.module}/user_data.sh.tftpl", {
-    aws_region        = data.aws_region.current.name
+    aws_region        = data.aws_region.current.region
     db_endpoint       = var.db_endpoint
     db_name           = var.db_name
     db_username       = var.db_username
