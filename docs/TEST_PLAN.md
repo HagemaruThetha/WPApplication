@@ -2,7 +2,7 @@
 
 ## Evidence status
 
-Static checks ran on Terraform v1.16.1 (AWS provider 6.62.0, random 3.9.1). A real test deployment was applied in AWS account `217508296909`, region `ap-southeast-1`. The site is `https://assessment.zharifzhafran.xyz`; apex and `www` DNS were left unchanged. Terraform now initializes WordPress and imports the five demo pages and styling. The generated test-admin password is stored in Secrets Manager. The latest launch-template refresh for Apache permalink rules is in progress, so the subpage routes still need a final check. The deployment incurs AWS charges while it remains running. The original scratch plan used example values and dummy credentials and is not evidence of the live deployment.
+Static checks ran on Terraform v1.16.1 (AWS provider 6.62.0, random 3.9.1). A real test deployment was applied in AWS account `<account-id-redacted>`, region `ap-southeast-1`. The site is `https://assessment.zharifzhafran.xyz`; apex and `www` DNS were left unchanged. Terraform now initializes WordPress and imports the five demo pages and styling. The generated test-admin password is stored in Secrets Manager. Subpage routes were rechecked on 5 Nov 2026 and return HTTP 200. After that deployment, one NACL rule was added in code (HTTP from the app subnets to the NAT gateways in the public subnets); it has been validated and tested but not yet applied to the live stack. The deployment incurs AWS charges while it remains running. The original scratch plan used example values and dummy credentials and is not evidence of the live deployment.
 
 ## Static and plan-level checks
 
@@ -12,7 +12,7 @@ Static checks ran on Terraform v1.16.1 (AWS provider 6.62.0, random 3.9.1). A re
 | WordPress startup script shell syntax | `bash -n terraform/modules/application/user_data.sh.tftpl` using Git for Windows Bash | Shell script parses without syntax errors | **Passed** |
 | Terraform initialization | `terraform init -backend=false -input=false` | AWS/random provider and local modules initialize successfully | **Passed** |
 | Terraform syntax/schema | `terraform validate` | Configuration is valid | **Passed** (rerun after the live hostname change) |
-| Resource and policy review | `terraform plan -refresh=false` with valid non-secret example inputs | Plan includes VPC, six subnets, NAT, NACLs, tier security groups, ALB, ASG, RDS, EFS, secret, IAM, and CloudFront; no public EC2/RDS | **Passed**: 96 resources to add, 0 change, 0 destroy; RDS `publicly_accessible=false`, storage encrypted |
+| Resource and policy review | `terraform plan -refresh=false` with valid non-secret example inputs | Plan includes VPC, six subnets, NAT, NACLs, tier security groups, ALB, ASG, RDS, EFS, secret, IAM, and CloudFront; no public EC2/RDS | **Passed**: 97 resources to add, 0 change, 0 destroy; RDS `publicly_accessible=false`, storage encrypted |
 | ASG bounds | Inspect plan for ASG values | `min_size=1`, `max_size=4`, desired capacity from 1 through 4 | **Passed**: plan shows min_size=1, max_size=4 |
 | Scale-out alarm | Inspect plan for CloudWatch alarm | CPU `GreaterThanThreshold` 80%, period 300 seconds, 6 evaluation periods and 6 datapoints to alarm | **Passed**: plan shows threshold, period 300, 6 evaluation periods, 6 datapoints |
 | Scale-in alarm | Inspect plan for CloudWatch alarm | CPU `LessThanThreshold` 40%, period 300 seconds, 6 evaluation periods and 6 datapoints to alarm | **Passed**: plan shows threshold, period 300, 6 evaluation periods, 6 datapoints |
@@ -46,15 +46,15 @@ Cost and teardown: Multi-AZ RDS, WAF and flow logs add cost. `deletion_protectio
 
 ## Post-deployment functional and security checks
 
-Live checks for the AWS test deployment. The homepage renders the demo content; the latest instance refresh is applying explicit Apache permalink rules. Authenticated admin flows and media-upload checks remain pending.
+Live checks for the AWS test deployment. The homepage and all four subpages render the demo content. Authenticated admin flows and media-upload checks remain pending.
 
 | Check | Method | Expected result | Result |
 |---|---|---|---|
 | DNS and CloudFront alias | Resolve `assessment.zharifzhafran.xyz` and inspect distribution | DNS aliases CloudFront; distribution is deployed with the test alias | **Passed**: CNAME resolves to `d1azyxn7hsmugw.cloudfront.net`; status `Deployed` |
 | Viewer TLS and HTTP redirect | `curl -I https://assessment.zharifzhafran.xyz` and HTTP URL | Valid certificate, HTTPS response; HTTP redirects to HTTPS | **Passed**: TLS verify result 0; HTTP returned 301 to HTTPS |
 | WordPress/PHP and DB connection | Request homepage through CloudFront | WordPress serves the configured demo homepage without PHP or DB errors | **Passed**: homepage returned HTTP 200 with demo content and school styling |
-| Demo subpages/permalinks | Request `/about/`, `/academics/`, `/admissions/`, and `/contact/` | Each page returns HTTP 200 | **Pending**: explicit Apache rewrite fix is in the latest instance refresh |
-| Canonical hostname | Inspect the homepage and page links | Site links use assessment test hostname | **Passed** on homepage; subpage route verification pending |
+| Demo subpages/permalinks | Request `/about/`, `/academics/`, `/admissions/`, and `/contact/` | Each page returns HTTP 200 | **Passed** (rechecked 5 Nov 2026): `/`, `/about/`, `/academics/`, `/admissions/`, `/contact/` all returned HTTP 200 |
+| Canonical hostname | Inspect the homepage and page links | Site links use assessment test hostname | **Passed** on homepage and subpages |
 | WAF | Request a script-injection query | WAF blocks the request | **Passed**: probe returned 403 |
 | CloudFront origin TLS | Request through CloudFront and inspect status/headers | HTTPS origin works without certificate mismatch or 502 | **Passed**: WordPress response served through CloudFront |
 | ALB target health | Inspect target group health | At least one WordPress EC2 target is healthy | **Passed** on the previous version; latest refresh is still in progress |

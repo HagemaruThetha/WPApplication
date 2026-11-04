@@ -1,0 +1,12 @@
+flowchart TD
+    Root["root: main.tf, variables.tf, outputs.tf, provider.tf, versions.tf, terraform.tfvars"]
+    Root --> Network["modules/network<br/>VPC, subnets, NAT, routes, NACLs,<br/>security groups, flow logs"]
+    Root --> Database["modules/database<br/>RDS MySQL, KMS key, Secrets Manager,<br/>monitoring role"]
+    Root --> Application["modules/application<br/>ALB, launch template, ASG, scaling alarms,<br/>EFS, IAM, access-log bucket"]
+    Root --> WAF["modules/waf<br/>WAFv2 web ACL (us-east-1)"]
+    Root --> CDN["modules/cdn<br/>CloudFront, log bucket"]
+    Network -->|subnet and security group IDs| Database
+    Network -->|subnet and security group IDs| Application
+    Database -->|endpoint, secret ARN, KMS key ARN| Application
+    WAF -->|web ACL ARN| CDN
+    Application -.->|ALB DNS name, via DNS record| CDN

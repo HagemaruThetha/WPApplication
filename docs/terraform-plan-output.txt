@@ -1,6 +1,6 @@
-module.application.data.aws_region.current: Reading...
-module.application.data.aws_elb_service_account.main: Reading...
 module.network.data.aws_region.current: Reading...
+module.application.data.aws_elb_service_account.main: Reading...
+module.application.data.aws_region.current: Reading...
 module.application.data.aws_elb_service_account.main: Read complete after 0s [id=114774131450]
 module.network.data.aws_region.current: Read complete after 0s [id=ap-southeast-1]
 module.application.data.aws_region.current: Read complete after 0s [id=ap-southeast-1]
@@ -557,7 +557,7 @@ Terraform will perform the following actions:
       + arn                                = (known after apply)
       + arn_suffix                         = (known after apply)
       + connection_termination             = (known after apply)
-      + deregistration_delay               = "300"
+      + deregistration_delay               = "30"
       + id                                 = (known after apply)
       + ip_address_type                    = (known after apply)
       + lambda_multi_value_headers_enabled = false
@@ -1305,6 +1305,23 @@ Terraform will perform the following actions:
       + upper            = true
     }
 
+  # module.database.random_password.site_admin will be created
+  + resource "random_password" "site_admin" {
+      + bcrypt_hash = (sensitive value)
+      + id          = (known after apply)
+      + length      = 32
+      + lower       = true
+      + min_lower   = 0
+      + min_numeric = 0
+      + min_special = 0
+      + min_upper   = 0
+      + number      = true
+      + numeric     = true
+      + result      = (sensitive value)
+      + special     = false
+      + upper       = true
+    }
+
   # module.database.random_password.wordpress_auth["AUTH_KEY"] will be created
   + resource "random_password" "wordpress_auth" {
       + bcrypt_hash = (sensitive value)
@@ -2039,6 +2056,24 @@ Terraform will perform the following actions:
               + to_port         = 443
                 # (1 unchanged attribute hidden)
             },
+          + {
+              + action          = "allow"
+              + cidr_block      = "10.40.10.0/24"
+              + from_port       = 80
+              + protocol        = "6"
+              + rule_no         = 120
+              + to_port         = 80
+                # (1 unchanged attribute hidden)
+            },
+          + {
+              + action          = "allow"
+              + cidr_block      = "10.40.11.0/24"
+              + from_port       = 80
+              + protocol        = "6"
+              + rule_no         = 121
+              + to_port         = 80
+                # (1 unchanged attribute hidden)
+            },
         ]
       + owner_id   = (known after apply)
       + region     = "ap-southeast-1"
@@ -2267,9 +2302,9 @@ Terraform will perform the following actions:
   + resource "aws_security_group" "alb" {
       + arn                    = (known after apply)
       + description            = "Allow HTTPS only from CloudFront origin-facing addresses."
-      + egress                 = []
+      + egress                 = (known after apply)
       + id                     = (known after apply)
-      + ingress                = []
+      + ingress                = (known after apply)
       + name                   = "school-site-assessment-alb-sg"
       + name_prefix            = (known after apply)
       + owner_id               = (known after apply)
@@ -2294,9 +2329,9 @@ Terraform will perform the following actions:
   + resource "aws_security_group" "app" {
       + arn                    = (known after apply)
       + description            = "Allow WordPress traffic from the ALB and required app egress only."
-      + egress                 = []
+      + egress                 = (known after apply)
       + id                     = (known after apply)
-      + ingress                = []
+      + ingress                = (known after apply)
       + name                   = "school-site-assessment-app-sg"
       + name_prefix            = (known after apply)
       + owner_id               = (known after apply)
@@ -2321,9 +2356,9 @@ Terraform will perform the following actions:
   + resource "aws_security_group" "db" {
       + arn                    = (known after apply)
       + description            = "Allow MySQL only from the WordPress application security group."
-      + egress                 = []
+      + egress                 = (known after apply)
       + id                     = (known after apply)
-      + ingress                = []
+      + ingress                = (known after apply)
       + name                   = "school-site-assessment-db-sg"
       + name_prefix            = (known after apply)
       + owner_id               = (known after apply)
@@ -2849,7 +2884,7 @@ Terraform will perform the following actions:
         }
     }
 
-Plan: 96 to add, 0 to change, 0 to destroy.
+Plan: 97 to add, 0 to change, 0 to destroy.
 
 Changes to Outputs:
   + alb_dns_name           = (known after apply)

@@ -1,0 +1,27 @@
+flowchart TB
+    V([Website visitors]) -->|HTTPS| CF
+    subgraph EDGE["Edge (global)"]
+        WAF[AWS WAF<br/>managed rules + rate limit] -.-> CF[CloudFront CDN<br/>HTTP redirects to HTTPS<br/>geo allowlist]
+    end
+    CF -->|HTTPS only| ALB
+    CF -.->|access logs| S3C[(S3 log bucket)]
+    subgraph VPC["VPC 10.40.0.0/16 (2 Availability Zones)"]
+        subgraph PUB["Public subnets (NACL)"]
+            ALB[Application Load Balancer<br/>HTTPS 443 from CloudFront prefix list only]
+            NAT[NAT gateway per AZ]
+        end
+        subgraph APP["Private app subnets (NACL)"]
+            ASG[WordPress EC2 Auto Scaling Group<br/>min 1, max 4<br/>scale out CPU above 80% for 30 min<br/>scale in CPU below 40% for 30 min]
+            EFS[(EFS: shared uploads<br/>KMS encrypted)]
+        end
+        subgraph DB["Private DB subnets (NACL)"]
+            RDS[(RDS MySQL<br/>private, encrypted, Multi-AZ)]
+        end
+        FL[VPC flow logs] -.-> CW[(CloudWatch Logs)]
+    end
+    ALB -->|HTTP 80, app SG only| ASG
+    ASG -->|MySQL 3306, DB SG only| RDS
+    ASG -->|NFS 2049| EFS
+    ASG -->|outbound 80/443| NAT
+    ALB -.->|access logs| S3A[(S3 log bucket)]
+    ASG -->|GetSecretValue + Decrypt only| SM[Secrets Manager<br/>KMS key]

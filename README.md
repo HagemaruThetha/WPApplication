@@ -1,17 +1,37 @@
-﻿# Xtremax Cloud Engineer Assessment — Terraform Submission
+# Xtremax Cloud Engineer Assessment — Terraform Submission
 
 This repository contains the Terraform implementation for the school WordPress assessment, architecture/module diagrams, and a validation/test record. The AWS test deployment is live at [https://assessment.zharifzhafran.xyz](https://assessment.zharifzhafran.xyz). It uses a separate test hostname so the existing apex and `www` DNS records stay untouched. See [docs/TEST_PLAN.md](docs/TEST_PLAN.md) for checks performed and remaining manual WordPress setup.
 
 ## Architecture
 
 ```mermaid
-flowchart TD
-    Visitor[Website visitors] -->|HTTPS| CF[CloudFront CDN]
-    CF -->|HTTPS to origin| ALB[Public Application Load Balancer]
-    ALB -->|HTTP in private VPC| ASG[WordPress EC2 Auto Scaling Group\nmin 1 / max 4]
-    ASG -->|MySQL 3306| RDS[(Private RDS MySQL)]
-    ASG -->|Shared uploads NFS 2049| EFS[(Private EFS)]
-    ASG -->|GetSecretValue only| SM[Secrets Manager]
+flowchart TB
+    V([Website visitors]) -->|HTTPS| CF
+    subgraph EDGE["Edge (global)"]
+        WAF[AWS WAF<br/>managed rules + rate limit] -.-> CF[CloudFront CDN<br/>HTTP redirects to HTTPS<br/>geo allowlist]
+    end
+    CF -->|HTTPS only| ALB
+    CF -.->|access logs| S3C[(S3 log bucket)]
+    subgraph VPC["VPC 10.40.0.0/16 (2 Availability Zones)"]
+        subgraph PUB["Public subnets (NACL)"]
+            ALB[Application Load Balancer<br/>HTTPS 443 from CloudFront prefix list only]
+            NAT[NAT gateway per AZ]
+        end
+        subgraph APP["Private app subnets (NACL)"]
+            ASG[WordPress EC2 Auto Scaling Group<br/>min 1, max 4<br/>scale out CPU above 80% for 30 min<br/>scale in CPU below 40% for 30 min]
+            EFS[(EFS: shared uploads<br/>KMS encrypted)]
+        end
+        subgraph DB["Private DB subnets (NACL)"]
+            RDS[(RDS MySQL<br/>private, encrypted, Multi-AZ)]
+        end
+        FL[VPC flow logs] -.-> CW[(CloudWatch Logs)]
+    end
+    ALB -->|HTTP 80, app SG only| ASG
+    ASG -->|MySQL 3306, DB SG only| RDS
+    ASG -->|NFS 2049| EFS
+    ASG -->|outbound 80/443| NAT
+    ALB -.->|access logs| S3A[(S3 log bucket)]
+    ASG -->|GetSecretValue + Decrypt only| SM[Secrets Manager<br/>KMS key]
 ```
 
 The assessment uses both “two-tier” and “three-tier” descriptions. This submission treats CloudFront as the edge layer, ALB plus WordPress as the web/application layer, and RDS as the data layer. Public and private subnet boundaries are documented in the Terraform network module. CloudFront redirects viewer HTTP to HTTPS and uses HTTPS to its custom origin. The ALB has an HTTPS listener only and its security group is limited to AWS’s CloudFront origin-facing managed prefix list; the app and DB security groups allow only the next required tier.
@@ -22,20 +42,46 @@ WordPress uploads are on EFS so all EC2 instances share media during scale-out o
 
 ```mermaid
 flowchart TD
-    Root[Root Terraform configuration]
-    Root --> Network[network: VPC, subnets, routes, NACLs, tier security groups]
-    Root --> Database[database: private RDS MySQL, subnet group, generated secret]
-    Root --> Application[application: ALB, WordPress launch template, ASG, scaling, EFS, IAM]
-    Root --> WAF[waf: CloudFront WAFv2 web ACL in us-east-1]
-    Root --> CDN[cdn: CloudFront distribution, logging and HTTPS origin]
-    Network --> Database
-    Network --> Application
-    Database --> Application
-    Application --> CDN
-    WAF --> CDN
+    Root["root: main.tf, variables.tf, outputs.tf, provider.tf, versions.tf, terraform.tfvars"]
+    Root --> Network["modules/network<br/>VPC, subnets, NAT, routes, NACLs,<br/>security groups, flow logs"]
+    Root --> Database["modules/database<br/>RDS MySQL, KMS key, Secrets Manager,<br/>monitoring role"]
+    Root --> Application["modules/application<br/>ALB, launch template, ASG, scaling alarms,<br/>EFS, IAM, access-log bucket"]
+    Root --> WAF["modules/waf<br/>WAFv2 web ACL (us-east-1)"]
+    Root --> CDN["modules/cdn<br/>CloudFront, log bucket"]
+    Network -->|subnet and security group IDs| Database
+    Network -->|subnet and security group IDs| Application
+    Database -->|endpoint, secret ARN, KMS key ARN| Application
+    WAF -->|web ACL ARN| CDN
+    Application -.->|ALB DNS name, via DNS record| CDN
 ```
 
-The `network` module creates two AZs of public, private application, and private database subnets. App subnets use one NAT gateway per AZ for outbound package installation; database subnets have no internet default route. It creates an ALB, app, and DB security group plus subnet NACLs. The `database` module accepts private DB subnets and its pre-created security group. The `application` module accepts ALB/app groups and the database endpoint/secret ARN. The `cdn` module accepts a custom DNS origin alias routed to the ALB.
+### Module structure
+
+```text
+terraform/                       <root>
+├── main.tf                      combines all modules that build the school web project
+├── variables.tf                 declares the variables used by main.tf
+├── terraform.tfvars             input values for all modules (example values in terraform.tfvars.example)
+├── outputs.tf                   final outputs once the stack is deployed
+├── provider.tf, versions.tf     AWS providers (default and us-east-1 alias), pinned versions
+├── plan.tftest.hcl              terraform test suite (mocked providers, no AWS needed)
+└── modules/
+    ├── network/                 VPC, subnets, NAT, routes, NACLs, security groups, flow logs
+    ├── database/                RDS MySQL, KMS key, Secrets Manager, monitoring role
+    ├── application/             ALB, launch template, Auto Scaling Group, alarms, EFS, IAM, log bucket
+    ├── waf/                     WAFv2 web ACL for CloudFront (us-east-1)
+    └── cdn/                     CloudFront distribution and log bucket
+```
+
+### Root files
+
+- `main.tf` at the root: combines all module folders and wires module outputs to module inputs (network feeds database and application; database feeds application; waf feeds cdn).
+- `terraform.tfvars`: the input values required by all modules. The ZIP ships a placeholder copy; the repository keeps `terraform.tfvars.example`.
+- `outputs.tf` at the root: shows the website URL, CloudFront domain, ALB DNS name and Auto Scaling group name after deployment.
+- `variables.tf` at the root: declares every variable used by `main.tf`.
+
+
+Detailed per-module inputs and outputs are in the table below. The `network` module creates two AZs of public, private application, and private database subnets. App subnets use one NAT gateway per AZ for outbound package installation; database subnets have no internet default route. It creates an ALB, app, and DB security group plus subnet NACLs. The `database` module accepts private DB subnets and its pre-created security group. The `application` module accepts ALB/app groups and the database endpoint/secret ARN. The `cdn` module accepts a custom DNS origin alias routed to the ALB.
 
 | Module | Inputs | Outputs |
 |---|---|---|

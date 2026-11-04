@@ -8,6 +8,8 @@ locals {
 
   public_ingress_rules = concat(
     [{ rule_no = 100, protocol = "6", from_port = 443, to_port = 443, cidr = "0.0.0.0/0" }],
+    # NAT gateways in the public subnets receive outbound HTTP from the app subnets.
+    [for index, cidr in local.app_cidrs : { rule_no = 120 + index, protocol = "6", from_port = 80, to_port = 80, cidr = cidr }],
     [{ rule_no = 110, protocol = "6", from_port = 1024, to_port = 65535, cidr = "0.0.0.0/0" }]
   )
   public_egress_rules = concat(
