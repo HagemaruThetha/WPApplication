@@ -34,6 +34,10 @@ flowchart TB
     ASG -->|GetSecretValue + Decrypt only| SM[Secrets Manager<br/>KMS key]
 ```
 
+Image version (renders anywhere): [docs/diagrams/system-architecture.png](docs/diagrams/system-architecture.png)
+
+![System architecture](docs/diagrams/system-architecture.png)
+
 The assessment uses both “two-tier” and “three-tier” descriptions. This submission treats CloudFront as the edge layer, ALB plus WordPress as the web/application layer, and RDS as the data layer. Public and private subnet boundaries are documented in the Terraform network module. CloudFront redirects viewer HTTP to HTTPS and uses HTTPS to its custom origin. The ALB has an HTTPS listener only and its security group is limited to AWS’s CloudFront origin-facing managed prefix list; the app and DB security groups allow only the next required tier.
 
 WordPress uploads are on EFS so all EC2 instances share media during scale-out or replacement. WordPress core is pinned to version `7.1.4` so each new instance starts with the same application version; this was the latest stable release in the official archive on November 4, 2026 ([WordPress release archive](https://wordpress.org/download/releases/)). The bootstrap disables WordPress dashboard file edits and updates so plugins/themes cannot silently diverge across instances; deploy plugin/theme changes through a reviewed, consistent bootstrap or image update. RDS is private and uses a generated password stored in Secrets Manager. The secret also stores one generated set of WordPress authentication keys and salts shared by every instance, so logins and nonces remain valid across ASG nodes. The EC2 role can read only that secret. Terraform state can contain sensitive database values and auth keys, so protect local/remote state and never include state in source control or the ZIP.
@@ -54,6 +58,8 @@ flowchart TD
     WAF -->|web ACL ARN| CDN
     Application -.->|ALB DNS name, via DNS record| CDN
 ```
+
+Image version (renders anywhere): [docs/diagrams/module-structure.png](docs/diagrams/module-structure.png)
 
 ### Module structure
 
