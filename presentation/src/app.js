@@ -132,7 +132,7 @@ function Iac({ n }) {
       ${Object.entries(pos).map(([id, [x, y]], k) => html`
         <${A} key=${id} i=${k} cls=${"mod" + (id === "network" ? " root" : "")} style=${{ left: x, top: y }}><h4>${id}</h4><p>${mod[id].body}</p></${A}>`)}
     </div>
-    <div class="practices"><${A} i=${4} as="h3">Built to be rerun</${A}>
+    <div class="practices"><${A} i=${4} as="h3">Same plan on any machine</${A}>
       ${d.practices.map((p, k) => html`<${A} key=${k} i=${k + 5}><${Svg} name="proof" style=${{ color: "var(--teal)" }} /><span>${p}</span></${A}>`)}
     </div><${Footer} n=${n} />`;
 }

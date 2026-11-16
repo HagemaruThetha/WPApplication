@@ -300,7 +300,7 @@ async function main() {
     }
 
     const px = 9.0, pw = W - M - px;
-    T(s, "Built to be rerun", { x: px, y: 2.0, w: pw, h: 0.45, fontSize: 18, bold: true, color: C.text1 });
+    T(s, "Same plan on any machine", { x: px, y: 2.0, w: pw, h: 0.45, fontSize: 18, bold: true, color: C.text1 });
     for (let i = 0; i < d.practices.length; i++) {
       const y = 2.65 + i * 1.15;
       s.addImage({ data: await png("proof", HEX.accent2), x: px, y: y + 0.03, w: 0.34, h: 0.34, altText: "check", objectName: "practice check " + i });
