@@ -34,3 +34,9 @@ npm run build        # writes deck.html and School_WordPress_on_AWS.pptx
 - `src/app.js`, `src/styles.css`: the React slides (React 18 with `htm`, no bundler)
 - `build-pptx.js`: PowerPoint layouts and slides (pptxgenjs), theme applied by `lib/apply_theme.js`
 - `icons.js`: Font Awesome icons via react-icons, shared by both builds
+
+## Design
+
+Visual pass made with [unslop](https://github.com/heydamir/unslop) by Damir Sokolovsky ([@heydamir](https://x.com/heydamir)), CC BY 4.0.
+Ink neutrals, one orange that marks the HTTPS request path and at most one key figure per slide,
+Lucide line icons in the muted text colour, weights 400 to 500, one short entrance animation.

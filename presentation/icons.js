@@ -1,36 +1,36 @@
-// Renders react-icons to SVG strings (for the HTML deck) and PNG buffers (for the .pptx).
+// Lucide line icons (via react-icons), one stroke everywhere.
+// SVG strings for the HTML deck, PNG data URIs for the .pptx.
 const React = require("react");
 const { renderToStaticMarkup } = require("react-dom/server");
-const fa = require("react-icons/fa6");
+const lu = require("react-icons/lu");
 
 const ICONS = {
-  brief: fa.FaClipboardList,
-  build: fa.FaCubes,
-  proof: fa.FaCircleCheck,
-  edge: fa.FaGlobe,
-  lock: fa.FaLock,
-  network: fa.FaNetworkWired,
-  key: fa.FaKey,
-  data: fa.FaDatabase,
-  db: fa.FaDatabase,
-  files: fa.FaFolderOpen,
-  users: fa.FaUsers,
-  pin: fa.FaThumbtack,
-  code: fa.FaCode,
-  shield: fa.FaShieldHalved,
-  cloud: fa.FaCloud,
-  server: fa.FaServer,
-  balance: fa.FaScaleBalanced,
-  user: fa.FaUserGroup,
-  arrowUp: fa.FaArrowUp,
-  arrowDown: fa.FaArrowDown,
-  pause: fa.FaPause,
+  edge: lu.LuGlobe,
+  lock: lu.LuLock,
+  network: lu.LuNetwork,
+  key: lu.LuKeyRound,
+  data: lu.LuDatabase,
+  db: lu.LuDatabase,
+  files: lu.LuFolderOpen,
+  users: lu.LuUsers,
+  user: lu.LuUser,
+  pin: lu.LuPin,
+  code: lu.LuCode,
+  shield: lu.LuShield,
+  cloud: lu.LuCloud,
+  server: lu.LuServer,
+  balance: lu.LuScale,
+  logs: lu.LuScrollText,
+  check: lu.LuCheck,
+  arrowUp: lu.LuArrowUp,
+  arrowDown: lu.LuArrowDown,
+  pause: lu.LuPause,
 };
 
-function svg(name, color = "currentColor", size = 256) {
+function svg(name, color = "currentColor", size = "1em") {
   const Comp = ICONS[name];
   if (!Comp) throw new Error(`Unknown icon ${name}`);
-  return renderToStaticMarkup(React.createElement(Comp, { color, size }));
+  return renderToStaticMarkup(React.createElement(Comp, { color, size, strokeWidth: 1.5 }));
 }
 
 async function png(name, hex, size = 256) {

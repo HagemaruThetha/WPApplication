@@ -23,17 +23,17 @@ const slides = [
       {
         icon: "brief",
         head: "The brief",
-        body: "WordPress behind CloudFront and an ALB, EC2 Auto Scaling (1 to 4), RDS MySQL, HTTPS end to end, least-privilege network and IAM.",
+        body: "WordPress behind CloudFront and an ALB, EC2 Auto Scaling (1 to 4), RDS MySQL, HTTPS end to end, least-privilege network and IAM",
       },
       {
         icon: "build",
         head: "What I built",
-        body: "Five reusable Terraform modules covering edge, network, app and data tiers, plus hardening beyond the brief: WAF, KMS, Multi-AZ, flow logs.",
+        body: "Five reusable Terraform modules covering edge, network, app and data tiers, plus hardening beyond the brief: WAF, KMS, Multi-AZ, flow logs",
       },
       {
         icon: "proof",
         head: "How I tested it",
-        body: "Unit tests, two security scanners, and a real deployment in ap-southeast-1 that passed live checks before a clean teardown.",
+        body: "Unit tests, two security scanners, and a real deployment in ap-southeast-1 that passed live checks before a clean teardown",
       },
     ],
     stats: [
@@ -58,7 +58,7 @@ const slides = [
       { icon: "edge", head: "Edge", body: "WAFv2 managed rules and rate limiting; CloudFront geo allowlist (ID, SG, MY)" },
       { icon: "lock", head: "Transport", body: "HTTP redirects to HTTPS; HTTPS-only origin; ALB on TLS 1.3 / 1.2 policy" },
       { icon: "network", head: "Network", body: "ALB open only to the CloudFront prefix list; chained security groups; three subnet NACLs" },
-      { icon: "key", head: "Identity", body: "EC2 role can read one secret and decrypt its key. No credentials in user data" },
+      { icon: "key", head: "Identity", body: "EC2 role can read one secret and decrypt its key; no credentials in user data" },
       { icon: "data", head: "Data", body: "Customer-managed KMS keys; encrypted RDS and EFS; flow logs and access logs to private S3" },
     ],
     callout: { value: "0", label: "public IPs on EC2 or RDS", sub: "Direct requests to the ALB from the internet time out by design" },
@@ -128,12 +128,14 @@ const slides = [
         items: [
           ["verify-live.sh", "9 / 9 passed"],
           ["HTTP → HTTPS", "301 redirect"],
+          ["TLS certificate", "valid"],
           ["WAF probe", "blocked with 403"],
+          ["Direct ALB request", "timed out"],
           ["Scaling path", "1 → 2 → 1 instances"],
         ],
       },
     ],
-    footnote: "Stack torn down with terraform destroy on 5 Nov 2026: 97 resources removed, no manual cleanup.",
+    footnote: "Stack torn down with terraform destroy on 5 Nov 2026: 97 resources removed, no manual cleanup",
     notes:
       "Static checks: formatting, validation, a plan of 97 resources, and three terraform test runs, all passing. Scanners: Checkov passed 173 checks with zero failures, and Trivy found nothing; the three skips are documented in the code with reasons, such as WordPress not supporting RDS IAM auth. Live: I deployed to Singapore and my verification script passed all nine checks: TLS, the HTTP redirect, every page, and a WAF block. I also forced the scaling alarms and watched the group go from 1 to 2 and back. Then I destroyed the stack so it wouldn't keep costing money.",
   },
