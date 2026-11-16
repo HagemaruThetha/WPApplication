@@ -1,6 +1,6 @@
 # Interview deck: School WordPress on AWS
 
-An 8-slide executive summary of this Terraform submission for a technical interview panel.
+A 10-slide executive summary of this Terraform submission for a technical interview panel.
 
 | File | What it is |
 |---|---|
@@ -16,8 +16,10 @@ An 8-slide executive summary of this Terraform submission for a technical interv
 | N | Show or hide speaker notes |
 | O | Overview grid |
 | F | Full screen |
-| 1–8 | Jump to a slide |
+| 1–9 | Jump to a slide |
 | Ctrl/Cmd + P | Print or save as PDF, one slide per page |
+
+Slides 8 and 9 present a proposed alternative (ECS Fargate, ECR and a GitHub Actions pipeline) and the trade-off against the EC2 design that was built.
 
 Slide 5 has live buttons that step the Auto Scaling group between 1 and 4 instances.
 

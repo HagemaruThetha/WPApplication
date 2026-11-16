@@ -140,6 +140,36 @@ const slides = [
       "Static checks: formatting, validation, a plan of 97 resources, and three terraform test runs, all passing. Scanners: Checkov passed 173 checks with zero failures, and Trivy found nothing; the three skips are documented in the code with reasons, such as WordPress not supporting RDS IAM auth. Live: I deployed to Singapore and my verification script passed all nine checks: TLS, the HTTP redirect, every page, and a WAF block. I also forced the scaling alarms and watched the group go from 1 to 2 and back. Then I destroyed the stack so it wouldn't keep costing money.",
   },
   {
+    id: "alt",
+    title: "Alternative design: ECS Fargate with a GitHub Actions pipeline",
+    pipeline: [
+      { head: "Push to main", body: "Dockerfile and Terraform in one repo" },
+      { head: "Build image", body: "WordPress 7.1.4 baked in" },
+      { head: "Scan", body: "Trivy on image and IaC" },
+      { head: "Push to ECR", body: "Tagged with the commit SHA" },
+      { head: "terraform apply", body: "OIDC role, no stored keys" },
+      { head: "Deploy to ECS", body: "Rolling, auto rollback" },
+    ],
+    notes:
+      "This is the design I'd move to next; I haven't built it. The edge, load balancer, database, EFS and Secrets Manager stay exactly as they are. What changes is the compute: the EC2 Auto Scaling group becomes an ECS service on Fargate, running the same WordPress version from a container image. A push to main triggers GitHub Actions. It builds the image, scans it and the Terraform with Trivy, pushes it to ECR tagged with the commit, runs terraform apply through an OIDC role so there are no long-lived AWS keys in GitHub, and rolls the service forward. If new tasks fail health checks, the ECS deployment circuit breaker rolls back. Tasks scale between 1 and 4 on the same CPU alarms, mount the same EFS for uploads, and get their secrets injected from Secrets Manager.",
+  },
+  {
+    id: "tradeoff",
+    title: "EC2 Auto Scaling or ECS Fargate",
+    head: ["", "EC2 Auto Scaling (built)", "ECS Fargate (proposed)"],
+    rows: [
+      ["Fit with the brief", "The brief asks for EC2 in an Auto Scaling group", "A change from the brief that would need agreement first"],
+      ["Patching", "Patch the OS by updating the AMI and refreshing instances", "No hosts to patch; AWS maintains the Fargate platform"],
+      ["Releases", "Each instance installs WordPress at boot from a script", "One tested image in ECR, identical on every task"],
+      ["Deploy and rollback", "Change the launch template, then an instance refresh", "Rolling deploy with automatic rollback on failed health checks"],
+      ["Scale-out", "New instances boot and install before serving", "New tasks pull a prebuilt image and start"],
+      ["Cost and parts", "Cheaper compute at steady load; fewer moving parts", "Pricier per vCPU; adds ECR, a pipeline and a Dockerfile"],
+    ],
+    verdict: "I built EC2 because the brief names it. I'd move to ECS Fargate once releases are frequent enough to need a pipeline.",
+    notes:
+      "Here's how the two compare. EC2 is what the brief asks for, it's cheaper for steady load, and it has fewer moving parts, but I own OS patching and every new instance installs WordPress at boot. Fargate removes host patching, and every task runs the same tested image, which makes deploys and rollbacks routine. The cost is a higher price per vCPU and more to maintain: a Dockerfile, ECR and the pipeline. So I built what the brief specified, and this is the path I'd recommend once the site is changing often.",
+  },
+  {
     id: "close",
     title: "Summary",
     takeaways: [

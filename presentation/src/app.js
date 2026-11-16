@@ -149,7 +149,44 @@ function Close() {
     <${A} i=${2} cls="thanks">Thank you<small>Questions welcome · ${meta.presenter}, ${meta.role}</small></${A}>`;
 }
 
-const VIEWS = { title: TitleSlide, summary: Summary, architecture: Architecture, security: Security, scaling: Scaling, iac: Iac, validation: Validation, close: Close };
+function Alt({ n }) {
+  const d = S.alt;
+  const tile = (x, y, w, h, ic, name, sub, dark) => html`
+    <div class=${"atile" + (dark ? " dark" : "")} style=${{ left: x, top: y, width: w, height: h }}><h4><${Icon} name=${ic} />${name}</h4><p>${sub}</p></div>`;
+  const flow = (x1, x2, label) => html`<div class="flow" style=${{ left: x1, width: x2 - x1, top: 219 }}><span>${label}</span></div>`;
+  return html`<div class="pad"><${Title}>${d.title}</${Title}></div>
+    <${A} i=${1} cls="alt">
+      <p class="lane" style=${{ top: 0 }}>New delivery pipeline, GitHub Actions</p>
+      ${d.pipeline.map((p, k) => html`
+        <div key=${p.head} class="step" style=${{ left: k * 196 }}><h4>${p.head}</h4><p>${p.body}</p></div>
+        ${k < d.pipeline.length - 1 && html`<div class="chev" style=${{ left: k * 196 + 172 }}></div>`}`)}
+      <div class="pull" style=${{ left: 672, top: 104, height: 60 }}><span>image pull</span></div>
+      <p class="lane" style=${{ top: 136 }}>Runtime</p>
+      <div class="visitors" style=${{ top: 164, height: 112, width: 112 }}><${Icon} name="users" />Visitors</div>
+      ${tile(160, 164, 212, 112, "edge", "CloudFront + WAF", "Unchanged")}
+      ${tile(420, 164, 128, 112, "balance", "ALB", "Unchanged")}
+      ${tile(596, 164, 240, 112, "cloud", "ECS on Fargate", "1 to 4 tasks on the same CPU alarms", true)}
+      ${tile(884, 164, 268, 112, "data", "RDS MySQL", "Multi-AZ, unchanged")}
+      ${tile(596, 300, 240, 88, "files", "EFS", "Uploads mounted into every task")}
+      ${tile(884, 300, 268, 88, "key", "Secrets Manager", "Injected through the task definition")}
+      <div class="pull" style=${{ left: 716, top: 276, height: 24 }}></div>
+      ${flow(112, 160, "HTTPS")} ${flow(372, 420, "HTTPS")} ${flow(548, 596, "HTTP")} ${flow(836, 884, "3306")}
+      <p class="lane" style=${{ top: 420 }}>Proposal, not built. Dark tile is the one runtime change; everything else stays as deployed</p>
+    </${A}><${Footer} n=${n} />`;
+}
+
+function Tradeoff({ n }) {
+  const d = S.tradeoff;
+  return html`<div class="pad"><${Title}>${d.title}</${Title}>
+    <${A} i=${1} cls="ttable">
+      <div class="tr th">${d.head.map((h, k) => html`<span key=${k}>${h}</span>`)}</div>
+      ${d.rows.map((r) => html`<div key=${r[0]} class="tr"><b>${r[0]}</b><span>${r[1]}</span><span>${r[2]}</span></div>`)}
+    </${A}>
+    <${A} i=${2} cls="verdict">${d.verdict}</${A}>
+    </div><${Footer} n=${n} />`;
+}
+
+const VIEWS = { title: TitleSlide, summary: Summary, architecture: Architecture, security: Security, scaling: Scaling, iac: Iac, validation: Validation, alt: Alt, tradeoff: Tradeoff, close: Close };
 const DARK = new Set(["title", "close"]);
 
 function Slide({ index, active }) {
@@ -255,7 +292,7 @@ function App() {
     ${help && html`<div class="help" onClick=${() => setHelp(false)}><div>
       <div><kbd>→</kbd>Next slide, also Space or click</div><div><kbd>←</kbd>Previous slide</div>
       <div><kbd>N</kbd>Speaker notes</div><div><kbd>O</kbd>Overview grid</div>
-      <div><kbd>F</kbd>Full screen</div><div><kbd>1–8</kbd>Jump to slide</div>
+      <div><kbd>F</kbd>Full screen</div><div><kbd>1–9</kbd>Jump to slide</div>
       <div><kbd>Ctrl/Cmd + P</kbd>Print or save as PDF</div></div></div>`}
     <div class="print-all">${slides.map((_, k) => html`<div key=${k} class="stage"><${Slide} index=${k} active=${false} /></div>`)}</div>`;
 }
