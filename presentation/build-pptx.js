@@ -352,32 +352,32 @@ async function main() {
       });
     });
     const vline = (x, y, h, name) => s.addShape(pres.shapes.LINE, { x: X(x), y: Y(y), w: 0, h: px(h), line: { color: HEX.accent4, width: 1, dashType: "dash" }, objectName: name });
-    vline(814, 184, 52, "image pull");
-    T(s, "image pull", { x: X(822), y: Y(194), w: 1.2, h: 0.2, fontSize: 9, fontFace: MONO, color: C.accent4 });
-    lane("Runtime", "", 212);
+    vline(814, 84, 76, "image pull");
+    T(s, "image pull", { x: X(822), y: Y(108), w: 1.2, h: 0.2, fontSize: 9, fontFace: MONO, color: C.accent4 });
+    lane("Runtime", "", 136);
 
-    rect(s, X(0), Y(236), px(112), px(96), C.text1, "Visitors", { radius: 0.08 });
-    await icon(s, "users", X(56) - 0.11, Y(250), 0.22, HEX.accent6);
-    T(s, "Visitors", { x: X(0), y: Y(288), w: px(112), h: 0.28, fontSize: 13, color: C.background1, align: "center" });
+    rect(s, X(0), Y(160), px(112), px(112), C.text1, "Visitors", { radius: 0.08 });
+    await icon(s, "users", X(56) - 0.11, Y(180), 0.22, HEX.accent6);
+    T(s, "Visitors", { x: X(0), y: Y(220), w: px(112), h: 0.28, fontSize: 13, color: C.background1, align: "center" });
     const tile = async (x, y, w, h, ic, name, sub, dark) => {
       rect(s, X(x), Y(y), px(w), px(h), dark ? C.text1 : C.background1, name + " tile", { radius: 0.08, line: dark ? undefined : { color: LINE, width: 0.75 } });
       await icon(s, ic, X(x) + 0.17, Y(y) + 0.17, 0.19, dark ? HEX.accent6 : HEX.accent4);
       T(s, name, { x: X(x) + 0.44, y: Y(y) + 0.13, w: px(w) - 0.55, h: 0.28, fontSize: 13, color: dark ? C.background1 : C.text1, valign: "middle" });
       T(s, sub, { x: X(x) + 0.17, y: Y(y) + 0.48, w: px(w) - 0.3, h: px(h) - 0.55, fontSize: 11, color: dark ? C.accent6 : C.text2 });
     };
-    await tile(160, 236, 200, 96, "edge", "CloudFront + WAF", "Unchanged");
-    await tile(408, 236, 128, 96, "balance", "ALB", "Unchanged");
-    await tile(584, 236, 260, 96, "cloud", "ECS on Fargate", "1 to 4 tasks, same CPU alarms", true);
-    await tile(892, 236, 260, 96, "data", "RDS MySQL", "Multi-AZ, unchanged");
-    await tile(584, 352, 260, 80, "files", "EFS", "Uploads mounted into every task");
-    await tile(892, 352, 260, 80, "key", "Secrets Manager", "Injected through the task definition");
-    vline(714, 332, 20, "EFS mount");
+    await tile(160, 160, 200, 112, "edge", "CloudFront + WAF", "Unchanged");
+    await tile(408, 160, 128, 112, "balance", "ALB", "Unchanged");
+    await tile(584, 160, 260, 112, "cloud", "ECS on Fargate", "1 to 4 tasks, same CPU alarms", true);
+    await tile(892, 160, 260, 112, "data", "RDS MySQL", "Multi-AZ, unchanged");
+    await tile(584, 296, 260, 88, "files", "EFS", "Uploads mounted into every task");
+    await tile(892, 296, 260, 88, "key", "Secrets Manager", "Injected through the task definition");
+    vline(714, 272, 24, "EFS mount");
     [[112, 160, "HTTPS"], [360, 408, "HTTPS"], [536, 584, "HTTP"], [844, 892, "3306"]].forEach(([a, b, l]) => {
-      const y = Y(284);
+      const y = Y(216);
       s.addShape(pres.shapes.LINE, { x: X(a), y, w: px(b - a), h: 0, line: { color: HEX.accent1, width: 2, endArrowType: "triangle" }, objectName: "request path " + l });
       T(s, l, { x: X(a) - 0.1, y: y - 0.3, w: px(b - a) + 0.2, h: 0.25, fontSize: 9, fontFace: MONO, color: C.accent2, align: "center", valign: "bottom" });
     });
-    T(s, d.footnote, { x: X(0), y: Y(452), w: CW, h: 0.25, fontSize: 10, color: C.accent4 });
+    T(s, d.footnote, { x: X(0), y: Y(412), w: CW, h: 0.25, fontSize: 10, color: C.accent4 });
     s.addNotes(d.notes);
   }
 
@@ -395,7 +395,7 @@ async function main() {
       r.forEach((cell, k) => T(s, cell, { x: cols[k][0], y, w: cols[k][1], h: rh, fontSize: k ? 13 : 14, color: k ? C.text2 : C.text1, valign: "middle" }));
     });
     hair(s, M, y0 + d.rows.length * rh, CW);
-    T(s, d.verdict, { x: M, y: 6.2, w: CW, h: 0.45, fontSize: 16, color: C.text1, valign: "middle" });
+    T(s, d.verdict, { x: M, y: y0 + d.rows.length * rh + 0.3, w: CW, h: 0.45, fontSize: 16, color: C.text1, valign: "middle" });
     s.addNotes(d.notes);
   }
 
