@@ -153,7 +153,7 @@ function Alt({ n }) {
   const d = S.alt;
   const tile = (x, y, w, h, ic, name, sub, dark) => html`
     <div class=${"atile" + (dark ? " dark" : "")} style=${{ left: x, top: y, width: w, height: h }}><h4><${Icon} name=${ic} />${name}</h4><p>${sub}</p></div>`;
-  const flow = (x1, x2, label) => html`<div class="flow" style=${{ left: x1, width: x2 - x1, top: 283 }}><span>${label}</span></div>`;
+  const flow = (x1, x2, label) => html`<div class="flow" style=${{ left: x1, width: x2 - x1, top: 215 }}><span>${label}</span></div>`;
   return html`<div class="pad"><${Title}>${d.title}</${Title}></div>
     <${A} i=${1} cls="alt">
       ${d.pipelines.map((pl, j) => html`<div key=${pl.name}>
@@ -162,18 +162,18 @@ function Alt({ n }) {
           <div key=${st.head} class="step" style=${{ left: k * 238, top: j * 100 + 20 }}><h4>${st.head}</h4><p>${st.body}</p></div>
           ${k < pl.steps.length - 1 && html`<div class="chev" style=${{ left: k * 238 + 206, top: j * 100 + 51 }}></div>`}`)}
       </div>`)}
-      <div class="pull" style=${{ left: 814, top: 184, height: 52 }}><span>image pull</span></div>
-      <p class="lane" style=${{ top: 212 }}><b>Runtime</b></p>
-      <div class="visitors" style=${{ top: 236, height: 96, width: 112 }}><${Icon} name="users" />Visitors</div>
-      ${tile(160, 236, 200, 96, "edge", "CloudFront + WAF", "Unchanged")}
-      ${tile(408, 236, 128, 96, "balance", "ALB", "Unchanged")}
-      ${tile(584, 236, 260, 96, "cloud", "ECS on Fargate", "1 to 4 tasks, same CPU alarms", true)}
-      ${tile(892, 236, 260, 96, "data", "RDS MySQL", "Multi-AZ, unchanged")}
-      ${tile(584, 352, 260, 80, "files", "EFS", "Uploads mounted into every task")}
-      ${tile(892, 352, 260, 80, "key", "Secrets Manager", "Injected through the task definition")}
-      <div class="pull" style=${{ left: 714, top: 332, height: 20 }}></div>
+      <div class="pull" style=${{ left: 814, top: 84, height: 76 }}><span>image pull</span></div>
+      <p class="lane" style=${{ top: 136 }}><b>Runtime</b></p>
+      <div class="visitors" style=${{ top: 160, height: 112, width: 112 }}><${Icon} name="users" />Visitors</div>
+      ${tile(160, 160, 200, 112, "edge", "CloudFront + WAF", "Unchanged")}
+      ${tile(408, 160, 128, 112, "balance", "ALB", "Unchanged")}
+      ${tile(584, 160, 260, 112, "cloud", "ECS on Fargate", "1 to 4 tasks, same CPU alarms", true)}
+      ${tile(892, 160, 260, 112, "data", "RDS MySQL", "Multi-AZ, unchanged")}
+      ${tile(584, 296, 260, 88, "files", "EFS", "Uploads mounted into every task")}
+      ${tile(892, 296, 260, 88, "key", "Secrets Manager", "Injected through the task definition")}
+      <div class="pull" style=${{ left: 714, top: 272, height: 24 }}></div>
       ${flow(112, 160, "HTTPS")} ${flow(360, 408, "HTTPS")} ${flow(536, 584, "HTTP")} ${flow(844, 892, "3306")}
-      <p class="lane" style=${{ top: 448 }}>${d.footnote}</p>
+      <p class="lane" style=${{ top: 412 }}>${d.footnote}</p>
     </${A}><${Footer} n=${n} />`;
 }
 
