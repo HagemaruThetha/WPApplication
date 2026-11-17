@@ -141,17 +141,34 @@ const slides = [
   },
   {
     id: "alt",
-    title: "Alternative design: ECS Fargate with a GitHub Actions pipeline",
-    pipeline: [
-      { head: "Push to main", body: "Dockerfile and Terraform in one repo" },
-      { head: "Build image", body: "WordPress 7.1.4 baked in" },
-      { head: "Scan", body: "Trivy on image and IaC" },
-      { head: "Push to ECR", body: "Tagged with the commit SHA" },
-      { head: "terraform apply", body: "OIDC role, no stored keys" },
-      { head: "Deploy to ECS", body: "Rolling, auto rollback" },
+    title: "Alternative: ECS Fargate, with infra and app pipelines",
+    pipelines: [
+      {
+        name: "Infrastructure pipeline",
+        when: "runs when a pull request changes terraform/ · manages every AWS resource below, except the image tag",
+        steps: [
+          { head: "PR changes terraform/", body: "Starts the workflow" },
+          { head: "Checkov and Trivy", body: "Scan the Terraform" },
+          { head: "terraform plan", body: "Posted on the PR" },
+          { head: "Merge and approve", body: "Reviewer signs off" },
+          { head: "terraform apply", body: "OIDC role, state in S3" },
+        ],
+      },
+      {
+        name: "Application pipeline",
+        when: "runs when a merge changes app/ · ships a new WordPress image, no Terraform",
+        steps: [
+          { head: "Merge changes app/", body: "Dockerfile, theme, plugins" },
+          { head: "Build image", body: "WordPress 7.1.4 baked in" },
+          { head: "Trivy scan", body: "Stops on High or Critical" },
+          { head: "Push to ECR", body: "Tagged with commit SHA" },
+          { head: "Deploy to ECS", body: "Rolling, auto rollback" },
+        ],
+      },
     ],
+    footnote: "Proposal, not built. Dark tile is the only runtime change. Terraform ignores the image tag, so the two pipelines never edit the same thing",
     notes:
-      "This is the design I'd move to next; I haven't built it. The edge, load balancer, database, EFS and Secrets Manager stay exactly as they are. What changes is the compute: the EC2 Auto Scaling group becomes an ECS service on Fargate, running the same WordPress version from a container image. A push to main triggers GitHub Actions. It builds the image, scans it and the Terraform with Trivy, pushes it to ECR tagged with the commit, runs terraform apply through an OIDC role so there are no long-lived AWS keys in GitHub, and rolls the service forward. If new tasks fail health checks, the ECS deployment circuit breaker rolls back. Tasks scale between 1 and 4 on the same CPU alarms, mount the same EFS for uploads, and get their secrets injected from Secrets Manager.",
+      "This is the design I'd move to next; I haven't built it. The edge, load balancer, database, EFS and Secrets Manager stay as they are. The EC2 Auto Scaling group becomes an ECS service on Fargate. Releases are split into two GitHub Actions workflows, chosen by which folder a change touches. The infrastructure pipeline runs when a pull request changes the terraform folder: Checkov and Trivy scan the code, terraform plan is posted on the pull request for review, and after merge a reviewer approves before terraform apply runs. It logs in to AWS through an OIDC role, so no long-lived keys sit in GitHub, and the state lives in S3 instead of on my laptop. The application pipeline runs when a merge changes the app folder: it builds the WordPress image, scans it with Trivy and stops on anything High or Critical, pushes it to ECR tagged with the commit, then registers a new task definition and rolls the ECS service forward. If new tasks fail health checks, the deployment circuit breaker rolls back. Terraform is told to ignore the image tag, so the two pipelines never fight over the same setting. Content edits in WordPress admin still go straight to the database and need neither pipeline.",
   },
   {
     id: "tradeoff",
@@ -161,13 +178,14 @@ const slides = [
       ["Fit with the brief", "The brief asks for EC2 in an Auto Scaling group", "A change from the brief that would need agreement first"],
       ["Patching", "Patch the OS by updating the AMI and refreshing instances", "No hosts to patch; AWS maintains the Fargate platform"],
       ["Releases", "Each instance installs WordPress at boot from a script", "One tested image in ECR, identical on every task"],
-      ["Deploy and rollback", "Change the launch template, then an instance refresh", "Rolling deploy with automatic rollback on failed health checks"],
+      ["Infra changes", "terraform apply run by hand from one machine", "Plan reviewed on the PR, applied after approval"],
+      ["App releases", "Change the launch template, then an instance refresh", "Rolling deploy from the app pipeline, automatic rollback"],
       ["Scale-out", "New instances boot and install before serving", "New tasks pull a prebuilt image and start"],
-      ["Cost and parts", "Cheaper compute at steady load; fewer moving parts", "Pricier per vCPU; adds ECR, a pipeline and a Dockerfile"],
+      ["Cost and parts", "Cheaper compute at steady load; fewer moving parts", "Pricier per vCPU; adds ECR, two workflows and S3 state"],
     ],
-    verdict: "I built EC2 because the brief names it. I'd move to ECS Fargate once releases are frequent enough to need a pipeline.",
+    verdict: "I built EC2 because the brief names it. I'd move to ECS Fargate once releases are frequent enough to need pipelines.",
     notes:
-      "Here's how the two compare. EC2 is what the brief asks for, it's cheaper for steady load, and it has fewer moving parts, but I own OS patching and every new instance installs WordPress at boot. Fargate removes host patching, and every task runs the same tested image, which makes deploys and rollbacks routine. The cost is a higher price per vCPU and more to maintain: a Dockerfile, ECR and the pipeline. So I built what the brief specified, and this is the path I'd recommend once the site is changing often.",
+      "Here's how the two compare. EC2 is what the brief asks for, it's cheaper for steady load, and it has fewer moving parts, but I own OS patching and every new instance installs WordPress at boot. Fargate removes host patching, and every task runs the same tested image, which makes deploys and rollbacks routine. Splitting the pipelines also means infrastructure changes get a reviewed plan instead of a manual apply from my machine. The cost is a higher price per vCPU and more to maintain: a Dockerfile, ECR, two workflows and remote state in S3. So I built what the brief specified, and this is the path I'd recommend once the site is changing often.",
   },
   {
     id: "close",

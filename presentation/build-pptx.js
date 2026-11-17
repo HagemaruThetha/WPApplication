@@ -336,45 +336,48 @@ async function main() {
     const d = S.alt;
     const s = pres.addSlide({ masterName: "Content", sectionTitle: "Trade-off" });
     s.addText(d.title, { placeholder: "title" });
-    const ox = M, oy = px(164);
+    const ox = M, oy = px(156);
     const X = (v) => ox + px(v), Y = (v) => oy + px(v);
-    const lane = (t, y) => T(s, t, { x: X(0), y: Y(y), w: 10, h: 0.22, fontSize: 10, color: C.accent4 });
-    lane("New delivery pipeline, GitHub Actions", 0);
-    d.pipeline.forEach((st, k) => {
-      const x = X(k * 196);
-      rect(s, x, Y(24), px(168), px(80), C.background2, "step " + st.head, { radius: 0.1 });
-      T(s, st.head, { x: x + 0.15, y: Y(24) + 0.12, w: px(168) - 0.3, h: 0.25, fontSize: 13, color: C.text1 });
-      T(s, st.body, { x: x + 0.15, y: Y(24) + 0.4, w: px(168) - 0.3, h: 0.4, fontSize: 10, color: C.text2 });
-      if (k < d.pipeline.length - 1)
-        s.addShape(pres.shapes.LINE, { x: X(k * 196 + 170), y: Y(64), w: px(24), h: 0, line: { color: HEX.accent4, width: 1.25, endArrowType: "triangle" }, objectName: "pipeline arrow" });
+    const lane = (name, rest, y) =>
+      T(s, [{ text: name + "  ", options: { color: C.text1 } }, { text: rest || "", options: { color: C.accent4 } }], { x: X(0), y: Y(y) - 0.02, w: CW, h: 0.2, fontSize: 10 });
+    d.pipelines.forEach((pl, j) => {
+      lane(pl.name, pl.when, j * 100);
+      pl.steps.forEach((st, k) => {
+        const x = X(k * 238), y = Y(j * 100 + 20);
+        rect(s, x, y, px(200), px(64), C.background2, pl.name + " step " + st.head, { radius: 0.1 });
+        T(s, st.head, { x: x + 0.15, y: y + 0.1, w: px(200) - 0.3, h: 0.24, fontSize: 12, color: C.text1 });
+        T(s, st.body, { x: x + 0.15, y: y + 0.36, w: px(200) - 0.3, h: 0.22, fontSize: 10, color: C.text2 });
+        if (k < pl.steps.length - 1)
+          s.addShape(pres.shapes.LINE, { x: X(k * 238 + 204), y: Y(j * 100 + 52), w: px(28), h: 0, line: { color: HEX.accent4, width: 1.25, endArrowType: "triangle" }, objectName: "pipeline arrow" });
+      });
     });
     const vline = (x, y, h, name) => s.addShape(pres.shapes.LINE, { x: X(x), y: Y(y), w: 0, h: px(h), line: { color: HEX.accent4, width: 1, dashType: "dash" }, objectName: name });
-    vline(672, 104, 60, "image pull");
-    T(s, "image pull", { x: X(680), y: Y(120), w: 1.2, h: 0.2, fontSize: 9, fontFace: MONO, color: C.accent4 });
-    lane("Runtime", 136);
+    vline(814, 184, 52, "image pull");
+    T(s, "image pull", { x: X(822), y: Y(194), w: 1.2, h: 0.2, fontSize: 9, fontFace: MONO, color: C.accent4 });
+    lane("Runtime", "", 212);
 
-    rect(s, X(0), Y(164), px(112), px(112), C.text1, "Visitors", { radius: 0.08 });
-    await icon(s, "users", X(56) - 0.11, Y(184), 0.22, HEX.accent6);
-    T(s, "Visitors", { x: X(0), y: Y(228), w: px(112), h: 0.28, fontSize: 13, color: C.background1, align: "center" });
+    rect(s, X(0), Y(236), px(112), px(96), C.text1, "Visitors", { radius: 0.08 });
+    await icon(s, "users", X(56) - 0.11, Y(250), 0.22, HEX.accent6);
+    T(s, "Visitors", { x: X(0), y: Y(288), w: px(112), h: 0.28, fontSize: 13, color: C.background1, align: "center" });
     const tile = async (x, y, w, h, ic, name, sub, dark) => {
       rect(s, X(x), Y(y), px(w), px(h), dark ? C.text1 : C.background1, name + " tile", { radius: 0.08, line: dark ? undefined : { color: LINE, width: 0.75 } });
-      await icon(s, ic, X(x) + 0.17, Y(y) + 0.19, 0.19, dark ? HEX.accent6 : HEX.accent4);
-      T(s, name, { x: X(x) + 0.44, y: Y(y) + 0.15, w: px(w) - 0.55, h: 0.28, fontSize: 13, color: dark ? C.background1 : C.text1, valign: "middle" });
-      T(s, sub, { x: X(x) + 0.17, y: Y(y) + 0.52, w: px(w) - 0.3, h: px(h) - 0.6, fontSize: 11, color: dark ? C.accent6 : C.text2 });
+      await icon(s, ic, X(x) + 0.17, Y(y) + 0.17, 0.19, dark ? HEX.accent6 : HEX.accent4);
+      T(s, name, { x: X(x) + 0.44, y: Y(y) + 0.13, w: px(w) - 0.55, h: 0.28, fontSize: 13, color: dark ? C.background1 : C.text1, valign: "middle" });
+      T(s, sub, { x: X(x) + 0.17, y: Y(y) + 0.48, w: px(w) - 0.3, h: px(h) - 0.55, fontSize: 11, color: dark ? C.accent6 : C.text2 });
     };
-    await tile(160, 164, 212, 112, "edge", "CloudFront + WAF", "Unchanged");
-    await tile(420, 164, 128, 112, "balance", "ALB", "Unchanged");
-    await tile(596, 164, 240, 112, "cloud", "ECS on Fargate", "1 to 4 tasks on the same CPU alarms", true);
-    await tile(884, 164, 268, 112, "data", "RDS MySQL", "Multi-AZ, unchanged");
-    await tile(596, 300, 240, 100, "files", "EFS", "Uploads mounted into every task");
-    await tile(884, 300, 268, 100, "key", "Secrets Manager", "Injected through the task definition");
-    vline(716, 276, 24, "EFS mount");
-    [[112, 160, "HTTPS"], [372, 420, "HTTPS"], [548, 596, "HTTP"], [836, 884, "3306"]].forEach(([a, b, l]) => {
-      const y = Y(220);
+    await tile(160, 236, 200, 96, "edge", "CloudFront + WAF", "Unchanged");
+    await tile(408, 236, 128, 96, "balance", "ALB", "Unchanged");
+    await tile(584, 236, 260, 96, "cloud", "ECS on Fargate", "1 to 4 tasks, same CPU alarms", true);
+    await tile(892, 236, 260, 96, "data", "RDS MySQL", "Multi-AZ, unchanged");
+    await tile(584, 352, 260, 80, "files", "EFS", "Uploads mounted into every task");
+    await tile(892, 352, 260, 80, "key", "Secrets Manager", "Injected through the task definition");
+    vline(714, 332, 20, "EFS mount");
+    [[112, 160, "HTTPS"], [360, 408, "HTTPS"], [536, 584, "HTTP"], [844, 892, "3306"]].forEach(([a, b, l]) => {
+      const y = Y(284);
       s.addShape(pres.shapes.LINE, { x: X(a), y, w: px(b - a), h: 0, line: { color: HEX.accent1, width: 2, endArrowType: "triangle" }, objectName: "request path " + l });
       T(s, l, { x: X(a) - 0.1, y: y - 0.3, w: px(b - a) + 0.2, h: 0.25, fontSize: 9, fontFace: MONO, color: C.accent2, align: "center", valign: "bottom" });
     });
-    T(s, "Proposal, not built. Dark tile is the one runtime change; everything else stays as deployed", { x: X(0), y: Y(420), w: CW, h: 0.25, fontSize: 11, color: C.accent4 });
+    T(s, d.footnote, { x: X(0), y: Y(452), w: CW, h: 0.25, fontSize: 10, color: C.accent4 });
     s.addNotes(d.notes);
   }
 
@@ -385,14 +388,14 @@ async function main() {
     s.addText(d.title, { placeholder: "title" });
     const cols = [[M, 2.1], [M + 2.5, 4.55], [M + 7.45, 4.55]];
     d.head.forEach((h, k) => T(s, h, { x: cols[k][0], y: 1.85, w: cols[k][1], h: 0.3, fontSize: 10, fontFace: MONO, color: C.accent4, valign: "middle" }));
-    const rh = 0.62, y0 = 2.2;
+    const rh = 0.55, y0 = 2.2;
     d.rows.forEach((r, j) => {
       const y = y0 + j * rh;
       hair(s, M, y, CW);
       r.forEach((cell, k) => T(s, cell, { x: cols[k][0], y, w: cols[k][1], h: rh, fontSize: k ? 13 : 14, color: k ? C.text2 : C.text1, valign: "middle" }));
     });
     hair(s, M, y0 + d.rows.length * rh, CW);
-    T(s, d.verdict, { x: M, y: 6.2, w: CW, h: 0.5, fontSize: 16, color: C.text1, valign: "middle" });
+    T(s, d.verdict, { x: M, y: 6.2, w: CW, h: 0.45, fontSize: 16, color: C.text1, valign: "middle" });
     s.addNotes(d.notes);
   }
 
