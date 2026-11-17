@@ -7,3 +7,6 @@ terraform/terraform.tfvars
 
 # Local tool configuration
 .terraformrc
+
+# Presentation build dependencies
+presentation/node_modules/
